@@ -14,6 +14,7 @@
     "@actiondock/sdk": "^2.4.0"
   },
   "devDependencies": {
+    "@actiondock/runtime-node": "^2.4.0",
     "@actiondock/testing": "^2.4.0",
     "@types/node": "^22.13.0",
     "tsx": "^4.19.0",
