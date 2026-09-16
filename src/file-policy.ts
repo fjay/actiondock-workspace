@@ -58,9 +58,7 @@ export function getRipgrepIgnoreGlobs(): string[] {
     "!.git/**",
     "!**/.git/**",
     "!.env",
-    "!.env.*",
     "!**/.env",
-    "!**/.env.*",
     "!*.pem",
     "!**/*.pem",
     "!*.key",
@@ -73,10 +71,5 @@ export function getRipgrepIgnoreGlobs(): string[] {
     "!**/.npmrc",
     "!.pypirc",
     "!**/.pypirc",
-    // Whitelisted exceptions explicitly allowed back
-    ".env.example",
-    "**/.env.example",
-    ".env.template",
-    "**/.env.template",
   ];
 }
