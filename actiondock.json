@@ -1,0 +1,384 @@
+{
+  "$schema": "https://actiondock.dev/schema/v2.json",
+  "schemaVersion": 2,
+  "id": "workspace",
+  "name": "Workspace",
+  "version": "0.1.0",
+  "description": "Read-only engineering workspace search and file access",
+  "config": {
+    "WORKSPACE_ROOT": {
+      "type": "string",
+      "description": "Workspace root directory path (defaults to process current working directory if unset)",
+      "env": "WORKSPACE_ROOT"
+    }
+  },
+  "actions": {
+    "search.rg": {
+      "entry": "actions/search-rg.ts",
+      "description": "Search text in the engineering workspace using ripgrep semantics. Most input fields map directly to ripgrep long options. Paths are relative to the workspace root.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "ripgrep search pattern (regular expression by default, or literal if fixed-strings is true)",
+            "examples": [
+              "refund_status",
+              "foo.bar()"
+            ]
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Paths to search, relative to workspace root. Defaults to workspace root if omitted.",
+            "examples": [
+              [
+                "src"
+              ],
+              [
+                "src/index.ts"
+              ]
+            ]
+          },
+          "fixed-strings": {
+            "type": "boolean",
+            "description": "Treat pattern as literal string instead of regular expression (-F)"
+          },
+          "ignore-case": {
+            "type": "boolean",
+            "description": "Case insensitive search (-i)"
+          },
+          "smart-case": {
+            "type": "boolean",
+            "description": "Smart case search: case-insensitive unless pattern contains uppercase (-S)"
+          },
+          "word-regexp": {
+            "type": "boolean",
+            "description": "Only match whole words (-w)"
+          },
+          "line-regexp": {
+            "type": "boolean",
+            "description": "Only match whole lines (-x)"
+          },
+          "glob": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Glob patterns to include or exclude (e.g. ['*.ts', '!generated/**']) (-g)",
+            "examples": [
+              [
+                "*.ts",
+                "!generated/**"
+              ]
+            ]
+          },
+          "type": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only search files matching file type definition (e.g. ['ts', 'py']) (--type)",
+            "examples": [
+              [
+                "ts"
+              ]
+            ]
+          },
+          "type-not": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Do not search files matching file type definition (--type-not)"
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Search hidden files and directories (--hidden)"
+          },
+          "no-ignore": {
+            "type": "boolean",
+            "description": "Do not respect .gitignore or other ignore files (--no-ignore)"
+          },
+          "follow": {
+            "type": "boolean",
+            "description": "Follow symbolic links (--follow)"
+          },
+          "context": {
+            "type": "number",
+            "description": "Show NUM lines before and after each match (-C)"
+          },
+          "before-context": {
+            "type": "number",
+            "description": "Show NUM lines before each match (-B)"
+          },
+          "after-context": {
+            "type": "number",
+            "description": "Show NUM lines after each match (-A)"
+          },
+          "multiline": {
+            "type": "boolean",
+            "description": "Enable matching across multiple lines (-U)"
+          },
+          "multiline-dotall": {
+            "type": "boolean",
+            "description": "Make '.' in regex match newlines (--multiline-dotall)"
+          },
+          "max-count": {
+            "type": "number",
+            "description": "Limit number of matching lines per file (-m)"
+          },
+          "max-columns": {
+            "type": "number",
+            "description": "Don't print lines longer than this limit in bytes (--max-columns)"
+          },
+          "max-columns-preview": {
+            "type": "boolean",
+            "description": "Print preview for lines exceeding max-columns (--max-columns-preview)"
+          }
+        },
+        "required": [
+          "pattern"
+        ],
+        "examples": [
+          {
+            "pattern": "refund_status",
+            "paths": [
+              "src"
+            ]
+          },
+          {
+            "pattern": "foo.bar()",
+            "fixed-strings": true
+          }
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "matches": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "number"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "before": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "line": {
+                        "type": "number"
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "line",
+                      "text"
+                    ]
+                  }
+                },
+                "after": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "line": {
+                        "type": "number"
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "line",
+                      "text"
+                    ]
+                  }
+                },
+                "truncated": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "path",
+                "line",
+                "text"
+              ]
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "matches",
+          "truncated"
+        ]
+      }
+    },
+    "files.read": {
+      "entry": "actions/files-read.ts",
+      "description": "Read UTF-8 text from a file in the engineering workspace. Supports reading from a specific line with bounded output. Paths are relative to the workspace root.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path to the file relative to the workspace root",
+            "examples": [
+              "src/index.ts"
+            ]
+          },
+          "startLine": {
+            "type": "number",
+            "description": "1-based starting line number. Defaults to 1.",
+            "default": 1
+          },
+          "maxLines": {
+            "type": "number",
+            "description": "Maximum number of lines to read. Defaults to 200.",
+            "default": 200
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "examples": [
+          {
+            "path": "package.json",
+            "startLine": 1,
+            "maxLines": 50
+          }
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "startLine": {
+            "type": "number"
+          },
+          "endLine": {
+            "type": "number"
+          },
+          "content": {
+            "type": "string"
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "startLine",
+          "endLine",
+          "content",
+          "hasMore"
+        ]
+      }
+    },
+    "files.list": {
+      "entry": "actions/files-list.ts",
+      "description": "List files and directories in the engineering workspace. Paths are relative to the workspace root.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Directory path relative to workspace root. Defaults to workspace root.",
+            "examples": [
+              "src"
+            ]
+          },
+          "depth": {
+            "type": "number",
+            "description": "Maximum directory traversal depth. Defaults to 1.",
+            "default": 1
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Whether to include hidden files. Defaults to false.",
+            "default": false
+          }
+        },
+        "examples": [
+          {
+            "path": "",
+            "depth": 1,
+            "hidden": false
+          }
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "file",
+                    "directory"
+                  ]
+                },
+                "sizeBytes": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "path",
+                "type"
+              ]
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "truncated"
+        ]
+      }
+    }
+  },
+  "files": [
+    "src",
+    ".actiondock/generated/actions.d.ts"
+  ],
+  "playbooks": {
+    "inspect-workspace": {
+      "entry": "playbooks/inspect-workspace.md",
+      "description": "Standard operating procedure for exploring files and searching codebase in the engineering workspace",
+      "actions": [
+        "search.rg",
+        "files.list",
+        "files.read"
+      ]
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "workspace",
+  "version": "0.1.0",
+  "description": "Read-only engineering workspace search and file access",
+  "type": "module",
+  "dependencies": {
+    "@actiondock/sdk": "^2.4.0"
+  }
+}
