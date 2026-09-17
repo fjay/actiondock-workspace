@@ -22,6 +22,43 @@
   - 核心参数：`path`、`depth`、`hidden`。
   - 特性：目录优先排序，输出文件字节大小，默认屏蔽隐藏项与内部敏感文件。
 
+## 工作区根目录与限定配置
+
+所有 Action 操作的边界均严格限定在工作区根目录下。未显式配置时，默认使用当前命令执行时的工作目录。可通过以下方式将操作范围限定在指定目录：
+
+### 配置方式 A：通过配置中心管理
+
+```bash
+# 为当前项目设定工作区根目录
+ad config set WORKSPACE_ROOT /path/to/target/project
+
+# 或设置全局默认工作区根目录
+ad config set --global WORKSPACE_ROOT /path/to/target/project
+
+# 检查当前配置项状态
+ad config schema
+```
+
+### 配置方式 B：通过环境变量注入
+
+```bash
+# 当前终端会话全局生效
+export WORKSPACE_ROOT=/path/to/target/project
+
+# 临时单次命令或启动 MCP 服务时指定
+WORKSPACE_ROOT=/srv/workspace ad run search.rg --input '{"pattern":"foo"}'
+WORKSPACE_ROOT=/srv/workspace ad mcp
+```
+
+### 限定目录的行为特性与安全保障
+
+- **路径越界全面拦截**：无论使用绝对路径、携带 `../` 的相对路径，还是跳出工作区的符号链接，均会被强制拦截并返回错误代码 `PATH_OUTSIDE_WORKSPACE` 或 `SYMLINK_OUTSIDE_WORKSPACE`。
+- **返回路径绝对保密**：所有动作返回的路径字段均为相对于 `WORKSPACE_ROOT` 的相对逻辑路径（例如 `src/index.ts`），绝不向模型或外部暴露宿主机物理绝对路径。
+- **单次调用子范围精细收敛**：在工作区根目录确立的基础上，可在单次调用中通过参数进一步限定子范围：
+  - 全文检索：通过 `paths` 数组限定只搜索某些子目录（例如 `{"paths":["src/services"]}`）。
+  - 目录浏览：通过 `path` 字符串限定只查看特定子目录（例如 `{"path":"src/utils"}`）。
+  - 文本读取：通过 `path` 字符串精确指向目标文件（例如 `{"path":"src/index.ts"}`）。
+
 ## 标准作业规程
 
 包含标准排查探索规程：`playbooks/inspect-workspace.md`。为智能体提供结构化的工作区代码排查步骤，按目录摸底、全文检索与分段精读顺序规范调用链路。
