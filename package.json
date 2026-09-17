@@ -20,5 +20,13 @@
     "@types/node": "^22.13.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "@actiondock/cli": ">=2.4.1"
+  },
+  "peerDependenciesMeta": {
+    "@actiondock/cli": {
+      "optional": true
+    }
   }
 }

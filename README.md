@@ -102,20 +102,6 @@ npm test
 npm run typecheck
 ```
 
-### CLI 工具链版本要求与运行时说明
-
-- **推荐工具链版本**：
-  推荐全局安装并使用 `@actiondock/cli >= 2.4.1`。
-- **旧版 2.4.0 运行时说明与临时解法**：
-  若在旧版 `@actiondock/cli 2.4.0` 环境下运行，本地直接执行动作时可能因平台进程驱动未注入而受限。此时可通过构建独立交付产物并直接通过 Node.js 执行入口脚本作为临时解法：
-  ```bash
-  # 构建独立交付产物
-  ad build -o dist/workspace-build
-
-  # 直接基于生成的入口脚本运行动作
-  node dist/workspace-build/entry.mjs run search.rg --input '{"pattern":"foo"}'
-  ```
-
 ### 命令行调试调用
 
 ```bash
