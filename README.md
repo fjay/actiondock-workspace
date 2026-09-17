@@ -29,10 +29,7 @@
 ### 配置方式 A：通过配置中心管理
 
 ```bash
-# 为当前项目设定工作区根目录
-ad config set WORKSPACE_ROOT /path/to/target/project
-
-# 或设置全局默认工作区根目录
+# 设置全局工作区根目录
 ad config set --global WORKSPACE_ROOT /path/to/target/project
 
 # 检查当前配置项状态
