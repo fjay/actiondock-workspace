@@ -12,13 +12,13 @@
 
 ## 核心动作列表
 
-- **结构化全文检索**：`workspace.search.rg`
+- **结构化全文检索**：`search.rg`（跨目录与全局调用标识：`workspace/search.rg`）
   - 核心参数：`pattern`、`paths`、`fixed-strings`、`ignore-case`、`smart-case`、`glob`、`context` 等。
   - 特性：流式解析 JSON Lines 事件流，支持匹配上下文合并，受限于服务端结果行数与字节预算。
-- **分页文本读取**：`workspace.files.read`
+- **分页文本读取**：`files.read`（跨目录与全局调用标识：`workspace/files.read`）
   - 核心参数：`path`、`startLine`、`maxLines`。
   - 特性：流式跳行读取，仅支持 UTF-8 编码，自动标记后续截断状态 `hasMore`。
-- **受控目录浏览**：`workspace.files.list`
+- **受控目录浏览**：`files.list`（跨目录与全局调用标识：`workspace/files.list`）
   - 核心参数：`path`、`depth`、`hidden`。
   - 特性：目录优先排序，输出文件字节大小，默认屏蔽隐藏项与内部敏感文件。
 
@@ -82,6 +82,16 @@ WORKSPACE_ROOT=/srv/workspace ad mcp
 
 ## 快速上手与运行
 
+### 依赖安装与开发环境准备
+
+- **克隆源码开发测试**：
+  克隆源码参与开发测试时，若系统全局配置了 `omit=dev` 导致开发依赖被忽略，请显式指定安装开发依赖：
+  ```bash
+  npm install --include=dev
+  ```
+- **导出的技能资产说明**：
+  导出的技能（`skills/workspace/`）仅包含纯生产依赖，完全不依赖开发依赖，可完全免疫 `omit=dev` 限制。
+
 ### 本地测试与类型检查
 
 ```bash
@@ -92,21 +102,60 @@ npm test
 npm run typecheck
 ```
 
+### CLI 工具链版本要求与运行时说明
+
+- **推荐工具链版本**：
+  推荐全局安装并使用 `@actiondock/cli >= 2.4.1`。
+- **旧版 2.4.0 运行时说明与临时解法**：
+  若在旧版 `@actiondock/cli 2.4.0` 环境下运行，本地直接执行动作时可能因平台进程驱动未注入而受限。此时可通过构建独立交付产物并直接通过 Node.js 执行入口脚本作为临时解法：
+  ```bash
+  # 构建独立交付产物
+  ad build -o dist/workspace-build
+
+  # 直接基于生成的入口脚本运行动作
+  node dist/workspace-build/entry.mjs run search.rg --input '{"pattern":"foo"}'
+  ```
+
 ### 命令行调试调用
 
 ```bash
 # 全局软链注册当前包
 ad link .
 
-# 检索包含指定关键字的代码
+# 单包简写调用（位于当前项目根目录下）
 ad run search.rg --input '{"pattern":"WorkspacePathPolicy","paths":["src"]}'
-
-# 读取特定代码片段
 ad run files.read --input '{"path":"src/limits.ts","startLine":1,"maxLines":20}'
-
-# 浏览指定目录结构
 ad run files.list --input '{"path":"src","depth":1}'
+
+# 跨目录与全局调用（任意工作目录下通过包前缀调用）
+ad run workspace/search.rg --input '{"pattern":"WorkspacePathPolicy","paths":["src"]}'
+ad run workspace/files.read --input '{"path":"src/limits.ts","startLine":1,"maxLines":20}'
+ad run workspace/files.list --input '{"path":"src","depth":1}'
 ```
+
+### 构建与独立分发
+
+- **默认构建（依赖宿主环境）**：
+  默认构建命令 `ad build` 生成的目录型交付产物依赖宿主环境中已具备的相应依赖：
+  ```bash
+  ad build -o dist/workspace-build
+  ```
+- **脱离项目独立分发（内联打包依赖）**：
+  脱离项目独立分发或部署至离线环境时，需使用 `--vendor-deps` 参数将锁定的生产依赖物化内联打包至交付产物中：
+  ```bash
+  # 物化内联生产依赖并输出到交付目录
+  ad build --vendor-deps -o dist/workspace-build
+
+  # 亦可附带 --archive 参数直接生成压缩归档文件
+  ad build --vendor-deps --archive -o dist/workspace.zip
+
+  # 运行独立分发产物
+  node dist/workspace-build/entry.mjs run search.rg --input '{"pattern":"foo"}'
+  ```
+- **同步导出智能体技能资产**：
+  ```bash
+  ad export skill -o skills/workspace
+  ```
 
 ## 工程目录结构
 
