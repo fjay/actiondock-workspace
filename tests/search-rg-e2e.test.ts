@@ -7,20 +7,14 @@ import { execFileSync } from "node:child_process";
 
 describe("workspace/search.rg end-to-end integration via ad CLI with real ripgrep", () => {
   it("executes real ripgrep process and returns actual matches on filesystem fixture", () => {
+    const projectRoot = path.resolve(import.meta.dirname, "..");
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ws-e2e-"));
     try {
       const srcDir = path.join(tmpDir, "src");
       fs.mkdirSync(srcDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(srcDir, "service.ts"),
-        "function processPayment() {\n  return 'ok';\n}\n"
-      );
-      fs.writeFileSync(
-        path.join(srcDir, "util.ts"),
-        "export const PAYMENT_MODE = 'card';\n"
-      );
-      // Sensitive files that must be excluded
-      fs.writeFileSync(path.join(tmpDir, ".env"), "PAYMENT_SECRET=123456\n");
+      fs.writeFileSync(path.join(srcDir, "service.ts"), "export const payment = 1;\n");
+      fs.writeFileSync(path.join(srcDir, "util.ts"), "export const PAYMENT_FEE = 2;\n");
+      fs.writeFileSync(path.join(tmpDir, ".env"), "PAYMENT_KEY=secret\n");
 
       const stdout = execFileSync(
         "ad",
@@ -36,7 +30,7 @@ describe("workspace/search.rg end-to-end integration via ad CLI with real ripgre
           }),
         ],
         {
-          cwd: "/root/code/workspace",
+          cwd: projectRoot,
           encoding: "utf8",
         }
       );
@@ -57,6 +51,7 @@ describe("workspace/search.rg end-to-end integration via ad CLI with real ripgre
       const file = path.join(tmpDir, "sample.ts");
       fs.writeFileSync(file, "const a = fn('hello.*');\nconst b = fn('hello');\n");
 
+      const projectRoot = path.resolve(import.meta.dirname, "..");
       const stdout = execFileSync(
         "ad",
         [
@@ -71,7 +66,7 @@ describe("workspace/search.rg end-to-end integration via ad CLI with real ripgre
           }),
         ],
         {
-          cwd: "/root/code/workspace",
+          cwd: projectRoot,
           encoding: "utf8",
         }
       );

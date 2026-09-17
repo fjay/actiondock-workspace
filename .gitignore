@@ -1,6 +1,36 @@
-.actiondock/
+# Dependencies
 node_modules/
+
+# Build & compilation outputs
 dist/
 build/
-*.log
+*.tsbuildinfo
+*.tgz
+
+# ActionDock runtime & local stores (preserve generated type declarations)
+.actiondock/*
+!.actiondock/generated/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Environment & sensitive files
 .env
+.env.*
+!.env.example
+!.env.template
+
+# Logs & temporary files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+tmp/
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
