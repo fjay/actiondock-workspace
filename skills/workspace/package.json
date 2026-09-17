@@ -4,6 +4,7 @@
   "description": "Read-only engineering workspace search and file access",
   "type": "module",
   "dependencies": {
-    "@actiondock/sdk": "^2.4.0"
+    "@actiondock/sdk": "^2.4.0",
+    "@vscode/ripgrep": "^1.18.0"
   }
 }

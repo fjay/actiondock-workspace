@@ -10,6 +10,7 @@ import {
   MAX_MATCH_LINE_BYTES,
 } from "../src/limits.ts";
 import { WorkspaceError } from "../src/errors.ts";
+import { resolveRipgrepPath } from "../src/rg-binary.ts";
 
 export type Input = ActionInput<"search.rg">;
 export type Output = ActionOutput<"search.rg">;
@@ -48,7 +49,7 @@ export default defineAction<Input, Output>(async (input, ctx) => {
     {
       requestId: `rg-${ctx.run.id}`,
       spec: {
-        executable: "rg",
+        executable: resolveRipgrepPath(),
         args,
         cwd: pathPolicy.root,
         io: { mode: "pipe" },

@@ -383,6 +383,7 @@
   },
   "files": [
     "src/rg-args.ts",
+    "src/rg-binary.ts",
     "src/errors.ts",
     "src/limits.ts",
     "src/path-policy.ts",
