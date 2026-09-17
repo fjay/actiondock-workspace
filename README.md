@@ -1,6 +1,6 @@
 # ActionDock Workspace
 
-面向智能体的只读安全工程工作区能力包，基于 ActionDock 2.0 规范构建，提供高吞吐结构化 ripgrep 检索、受控分段文本读取与受限目录浏览能力。
+面向智能体的只读安全工程工作区能力包，基于 [ActionDock 2.0](https://github.com/team4u/actiondock) 规范构建，提供高吞吐结构化 ripgrep 检索、受控分段文本读取与受限目录浏览能力。
 
 ## 核心定位与设计原则
 
