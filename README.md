@@ -12,13 +12,13 @@
 
 ## 核心动作列表
 
-- **结构化全文检索**：`search.rg`（跨目录与全局调用标识：`workspace/search.rg`）
+- **结构化全文检索**：`search.rg`（完全限定标识：`workspace/search.rg`）
   - 核心参数：`pattern`、`paths`、`fixed-strings`、`ignore-case`、`smart-case`、`glob`、`context` 等。
   - 特性：流式解析 JSON Lines 事件流，支持匹配上下文合并，受限于服务端结果行数与字节预算。
-- **分页文本读取**：`files.read`（跨目录与全局调用标识：`workspace/files.read`）
+- **分页文本读取**：`files.read`（完全限定标识：`workspace/files.read`）
   - 核心参数：`path`、`startLine`、`maxLines`。
   - 特性：流式跳行读取，仅支持 UTF-8 编码，自动标记后续截断状态 `hasMore`。
-- **受控目录浏览**：`files.list`（跨目录与全局调用标识：`workspace/files.list`）
+- **受控目录浏览**：`files.list`（完全限定标识：`workspace/files.list`）
   - 核心参数：`path`、`depth`、`hidden`。
   - 特性：目录优先排序，输出文件字节大小，默认屏蔽隐藏项与内部敏感文件。
 
@@ -105,15 +105,15 @@ npm run typecheck
 ### 命令行调试调用
 
 ```bash
-# 全局软链注册当前包
+# 全局软链注册当前包（只需在开发机执行一次）
 ad link .
 
-# 单包简写调用（位于当前项目根目录下）
+# 直接调用动作（只要无同名冲突，在系统任意目录下均可直接调用）
 ad run search.rg --input '{"pattern":"WorkspacePathPolicy","paths":["src"]}'
 ad run files.read --input '{"path":"src/limits.ts","startLine":1,"maxLines":20}'
 ad run files.list --input '{"path":"src","depth":1}'
 
-# 跨目录与全局调用（任意工作目录下通过包前缀调用）
+# 带包限定前缀调用（当环境存在同名 Action 冲突时，可通过包前缀精准消除歧义）
 ad run workspace/search.rg --input '{"pattern":"WorkspacePathPolicy","paths":["src"]}'
 ad run workspace/files.read --input '{"path":"src/limits.ts","startLine":1,"maxLines":20}'
 ad run workspace/files.list --input '{"path":"src","depth":1}'
