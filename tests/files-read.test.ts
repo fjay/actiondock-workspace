@@ -131,4 +131,28 @@ describe("workspace/files.read", () => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it("reads file where UTF-8 multi-byte character crosses the 8KB sampling boundary", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ws-read-boundary-"));
+    try {
+      const file = path.join(tmpDir, "boundary.txt");
+      // 8190 bytes ASCII + 3 bytes Chinese ('中') crossing the 8192 boundary
+      const content = "a".repeat(8190) + "中文\n";
+      fs.writeFileSync(file, content, "utf-8");
+
+      const runtime = createTestRuntime({
+        config: { WORKSPACE_ROOT: tmpDir },
+      });
+
+      const res = await runtime.run(filesReadAction, {
+        path: "boundary.txt",
+      });
+      assert.equal(res.path, "boundary.txt");
+      assert.ok(res.content.startsWith("a".repeat(100)));
+      assert.ok(res.content.includes("中文"));
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
+

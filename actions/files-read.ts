@@ -41,7 +41,7 @@ function validateUtf8File(filePath: string, sizeBytes: number): void {
     // UTF-8 validation
     const decoder = new TextDecoder("utf-8", { fatal: true });
     try {
-      decoder.decode(slice);
+      decoder.decode(slice, { stream: bytesRead < sizeBytes });
     } catch {
       throw new WorkspaceError(
         "Non-UTF-8 text encoding is not supported",
