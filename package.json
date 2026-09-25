@@ -1,0 +1,27 @@
+{
+  "name": "knowledge-server",
+  "version": "1.0.0",
+  "description": "ActionDock 2.x Cloud Knowledge Server - All-in-One Container Distribution",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "docker compose build",
+    "up": "docker compose up -d",
+    "down": "docker compose down",
+    "logs": "docker compose logs -f",
+    "restart": "docker compose restart",
+    "shell": "docker exec -it knowledge-server bash",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "keywords": [
+    "actiondock",
+    "knowledge",
+    "monorepo",
+    "docker",
+    "server"
+  ],
+  "author": "ActionDock Knowledge Team",
+  "license": "MIT"
+}

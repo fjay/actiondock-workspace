@@ -1,0 +1,19 @@
+[
+  {
+    "path": "/srv/workspace/order-service",
+    "repoType": "code",
+    "sourceBranch": "release",
+    "knowledgeBranch": "docs"
+  },
+  {
+    "path": "/srv/workspace/cron-service",
+    "repoType": "code",
+    "sourceBranch": "release",
+    "knowledgeBranch": "docs"
+  },
+  {
+    "path": "/srv/workspace/system-knowledge",
+    "repoType": "system_knowledge",
+    "sourceBranch": "master"
+  }
+]

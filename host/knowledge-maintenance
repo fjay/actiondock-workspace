@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# knowledge-maintenance (宿主机包装脚本)
+# 
+# 用途：供 Maintainer Agent 定时通过 SSH 连入云主机时调用
+# 示例：ssh deploy@cloud-host "knowledge-maintenance --config /etc/actiondock/repos.json"
+# 安装：将本脚本拷贝至宿主机 /usr/local/bin/knowledge-maintenance 并赋予执行权限
+# ==============================================================================
+set -euo pipefail
+
+CONTAINER_NAME="${KNOWLEDGE_CONTAINER_NAME:-knowledge-server}"
+
+# 检查 Docker 服务及容器运行状态
+if ! command -v docker &>/dev/null; then
+    echo "[ERROR] Docker 命令在宿主机上未找到" >&2
+    exit 1
+fi
+
+if ! docker ps --format '{{.Names}}' | grep -Eq "^${CONTAINER_NAME}\$"; then
+    echo "[ERROR] 容器 '${CONTAINER_NAME}' 未运行，请先执行 'docker compose up -d'" >&2
+    exit 1
+fi
+
+# 调用容器内的维护驱动脚本并传递所有参数
+exec docker exec -i "${CONTAINER_NAME}" run-maintenance.sh "$@"

@@ -1,0 +1,450 @@
+{
+  "$schema": "https://actiondock.dev/schema/v2.json",
+  "schemaVersion": 2,
+  "id": "knowledge",
+  "name": "Knowledge Inbox",
+  "version": "0.1.0",
+  "description": "Feedback and append plane for knowledge base maintenance, collecting, listing, and archiving candidate markdown documents",
+  "config": {
+    "KNOWLEDGE_INBOX_ROOT": {
+      "type": "string",
+      "description": "Root storage directory path for knowledge inbox candidates and archives (default: /srv/knowledge-inbox)",
+      "env": "KNOWLEDGE_INBOX_ROOT"
+    }
+  },
+  "actions": {
+    "knowledge.collect": {
+      "entry": "actions/knowledge-collect.ts",
+      "description": "Collect candidate markdown knowledge documents with automatic frontmatter enrichment, secure ID generation, and structured pending directory storage.",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Markdown text content of the candidate knowledge document",
+            "examples": [
+              "# MySQL Connection Timeout Solution\n\nWhen encountering error 2006 (HY000), adjust wait_timeout in my.cnf.",
+              "---\ntitle: Kafka Lag Alert Remediation\ndomain: messaging\ntags: [kafka, devops]\n---\n\n## Symptoms\nConsumer group lag spikes..."
+            ]
+          },
+          "filename": {
+            "type": "string",
+            "description": "Optional suggested filename or title slug for the document (e.g. 'mysql-timeout' or 'kafka-lag.md')",
+            "examples": [
+              "mysql-timeout",
+              "kafka-lag.md",
+              "redis-oom-incident"
+            ]
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "id",
+          "filename",
+          "path",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique candidate document identifier (format: YYYYMMDD-hash)"
+          },
+          "filename": {
+            "type": "string",
+            "description": "Normalized, safe filename written to the pending directory"
+          },
+          "path": {
+            "type": "string",
+            "description": "Absolute filesystem path where the markdown file was stored"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending"
+            ],
+            "description": "Current lifecycle status of the collected document"
+          }
+        }
+      },
+      "examples": [
+        {
+          "title": "Collect raw markdown without frontmatter",
+          "input": {
+            "content": "# Redis Cluster Split Brain Recovery\n\nCheck cluster nodes quorum and verify network partitions.",
+            "filename": "redis-split-brain"
+          },
+          "output": {
+            "id": "20260924-a1b2c3",
+            "filename": "20260924-112345-a1b2c3-redis-split-brain.md",
+            "path": "/srv/knowledge-inbox/pending/20260924-112345-a1b2c3-redis-split-brain.md",
+            "status": "pending"
+          }
+        },
+        {
+          "title": "Collect structured markdown with existing frontmatter",
+          "input": {
+            "content": "---\ntitle: Kubernetes Pod Eviction Troubleshooting\ndomain: infrastructure\ntags:\n  - k8s\n  - memory\n---\n\nWhen disk pressure occurs, inspect ephemeral storage limits.",
+            "filename": "k8s-pod-eviction.md"
+          },
+          "output": {
+            "id": "20260924-d4e5f6",
+            "filename": "20260924-112500-d4e5f6-k8s-pod-eviction.md",
+            "path": "/srv/knowledge-inbox/pending/20260924-112500-d4e5f6-k8s-pod-eviction.md",
+            "status": "pending"
+          }
+        },
+        {
+          "title": "Collect candidate without filename, inferring title slug",
+          "input": {
+            "content": "# Nginx 502 Bad Gateway 常见排查\n\n检查 upstream php-fpm 或 node 进程是否存活。"
+          },
+          "output": {
+            "id": "20260924-e7f8a9",
+            "filename": "20260924-112610-e7f8a9-nginx-502-bad-gateway-常见排查.md",
+            "path": "/srv/knowledge-inbox/pending/20260924-112610-e7f8a9-nginx-502-bad-gateway-常见排查.md",
+            "status": "pending"
+          }
+        }
+      ]
+    },
+    "knowledge.list": {
+      "entry": "actions/knowledge-list.ts",
+      "description": "List knowledge candidate documents filtered by lifecycle status (pending, processed, or all) and optional calendar year, sorted in descending order by creation timestamp.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processed",
+              "all"
+            ],
+            "description": "Filter candidates by processing status. Defaults to 'pending'.",
+            "default": "pending",
+            "examples": [
+              "pending",
+              "processed",
+              "all"
+            ]
+          },
+          "year": {
+            "type": "string",
+            "description": "Optional 4-digit calendar year filter (e.g. '2026'). Restricts scanned processed archives and filtered results to the specified year.",
+            "examples": [
+              "2026",
+              "2025"
+            ]
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "description": "List of knowledge documents ordered by creation time descending",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "filename",
+                "path",
+                "status"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Unique document identifier"
+                },
+                "filename": {
+                  "type": "string",
+                  "description": "Base filename of the document"
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Absolute path to the document file"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "processed"
+                  ],
+                  "description": "Document lifecycle status"
+                },
+                "year": {
+                  "type": "string",
+                  "description": "Calendar year extracted from directory hierarchy, creation timestamp, or candidate ID prefix"
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Document title extracted from frontmatter or heading"
+                },
+                "domain": {
+                  "type": "string",
+                  "description": "Subject domain extracted from frontmatter"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Tags extracted from frontmatter"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "description": "ISO 8601 creation timestamp"
+                },
+                "archivedAt": {
+                  "type": "string",
+                  "description": "ISO 8601 archive timestamp (if processed)"
+                },
+                "resolution": {
+                  "type": "string",
+                  "enum": [
+                    "accepted",
+                    "duplicate",
+                    "rejected",
+                    "insufficient_evidence"
+                  ],
+                  "description": "Processing resolution if archived"
+                },
+                "archiveNote": {
+                  "type": "string",
+                  "description": "Archival note or conclusion if provided"
+                }
+              }
+            }
+          }
+        }
+      },
+      "examples": [
+        {
+          "title": "List pending knowledge candidates awaiting review",
+          "input": {
+            "status": "pending"
+          },
+          "output": {
+            "items": [
+              {
+                "id": "20260924-a1b2c3",
+                "filename": "20260924-112345-a1b2c3-redis-split-brain.md",
+                "path": "/srv/knowledge-inbox/pending/20260924-112345-a1b2c3-redis-split-brain.md",
+                "status": "pending",
+                "year": "2026",
+                "title": "Redis Cluster Split Brain Recovery",
+                "domain": "infrastructure",
+                "tags": [
+                  "redis",
+                  "cluster"
+                ],
+                "createdAt": "2026-09-24T11:23:45.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "title": "List processed archived documents filtered by year",
+          "input": {
+            "status": "processed",
+            "year": "2026"
+          },
+          "output": {
+            "items": [
+              {
+                "id": "20260924-d4e5f6",
+                "filename": "20260924-112500-d4e5f6-k8s-pod-eviction.md",
+                "path": "/srv/knowledge-inbox/processed/2026/accepted/20260924-112500-d4e5f6-k8s-pod-eviction.md",
+                "status": "processed",
+                "year": "2026",
+                "title": "Kubernetes Pod Eviction Troubleshooting",
+                "domain": "infrastructure",
+                "tags": [
+                  "k8s"
+                ],
+                "createdAt": "2026-09-24T11:25:00.000Z",
+                "archivedAt": "2026-09-24T11:30:00.000Z",
+                "resolution": "accepted",
+                "archiveNote": "Merged into cluster guide"
+              }
+            ]
+          }
+        },
+        {
+          "title": "List all candidates across all statuses",
+          "input": {
+            "status": "all"
+          },
+          "output": {
+            "items": [
+              {
+                "id": "20260924-a1b2c3",
+                "filename": "20260924-112345-a1b2c3-redis-split-brain.md",
+                "path": "/srv/knowledge-inbox/pending/20260924-112345-a1b2c3-redis-split-brain.md",
+                "status": "pending",
+                "year": "2026",
+                "title": "Redis Cluster Split Brain Recovery",
+                "createdAt": "2026-09-24T11:23:45.000Z"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "knowledge.archive": {
+      "entry": "actions/knowledge-archive.ts",
+      "description": "Archive a pending candidate document to the processed folder under its year and resolution category (processed/<year>/<resolution>/), updating its frontmatter with resolution status and notes.",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Candidate document identifier or filename to archive",
+            "examples": [
+              "20260924-a1b2c3",
+              "20260924-112345-a1b2c3-redis-split-brain.md"
+            ]
+          },
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "duplicate",
+              "rejected",
+              "insufficient_evidence"
+            ],
+            "description": "Archival resolution decision. Defaults to 'accepted'.",
+            "default": "accepted",
+            "examples": [
+              "accepted",
+              "duplicate",
+              "rejected",
+              "insufficient_evidence"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "description": "Optional archival notes or decision explanation",
+            "examples": [
+              "Merged into database troubleshooting guide",
+              "Duplicate of KB-20260901-01",
+              "Insufficient diagnostic evidence provided"
+            ]
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "id",
+          "fromPath",
+          "toPath",
+          "resolution",
+          "status",
+          "year"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Identifier of the archived document"
+          },
+          "fromPath": {
+            "type": "string",
+            "description": "Original source file path in the pending directory"
+          },
+          "toPath": {
+            "type": "string",
+            "description": "Target destination file path in the processed directory"
+          },
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "duplicate",
+              "rejected",
+              "insufficient_evidence"
+            ],
+            "description": "Applied resolution outcome"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "archived"
+            ],
+            "description": "Lifecycle status after archive"
+          },
+          "year": {
+            "type": "string",
+            "description": "Calendar year category under which the document was archived"
+          }
+        }
+      },
+      "examples": [
+        {
+          "title": "Archive accepted candidate into permanent knowledge base",
+          "input": {
+            "id": "20260924-a1b2c3",
+            "resolution": "accepted",
+            "note": "Merged into redis operations runbook"
+          },
+          "output": {
+            "id": "20260924-a1b2c3",
+            "fromPath": "/srv/knowledge-inbox/pending/20260924-112345-a1b2c3-redis-split-brain.md",
+            "toPath": "/srv/knowledge-inbox/processed/2026/accepted/20260924-112345-a1b2c3-redis-split-brain.md",
+            "resolution": "accepted",
+            "status": "archived",
+            "year": "2026"
+          }
+        },
+        {
+          "title": "Archive duplicate candidate with reference note",
+          "input": {
+            "id": "20260924-112345-a1b2c3-redis-split-brain.md",
+            "resolution": "duplicate",
+            "note": "Duplicate of KB-20260901-01"
+          },
+          "output": {
+            "id": "20260924-a1b2c3",
+            "fromPath": "/srv/knowledge-inbox/pending/20260924-112345-a1b2c3-redis-split-brain.md",
+            "toPath": "/srv/knowledge-inbox/processed/2026/duplicate/20260924-112345-a1b2c3-redis-split-brain.md",
+            "resolution": "duplicate",
+            "status": "archived",
+            "year": "2026"
+          }
+        },
+        {
+          "title": "Archive candidate rejected due to insufficient evidence",
+          "input": {
+            "id": "20260924-d4e5f6",
+            "resolution": "insufficient_evidence",
+            "note": "Missing reproduction logs and kernel version details"
+          },
+          "output": {
+            "id": "20260924-d4e5f6",
+            "fromPath": "/srv/knowledge-inbox/pending/20260924-112500-d4e5f6-k8s-pod-eviction.md",
+            "toPath": "/srv/knowledge-inbox/processed/2026/insufficient_evidence/20260924-112500-d4e5f6-k8s-pod-eviction.md",
+            "resolution": "insufficient_evidence",
+            "status": "archived",
+            "year": "2026"
+          }
+        }
+      ]
+    }
+  },
+  "files": [
+    "src",
+    ".actiondock/generated/actions.d.ts"
+  ]
+}

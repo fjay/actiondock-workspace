@@ -1,0 +1,4 @@
+interface:
+  display_name: "项目知识维护"
+  short_description: "面向 Agent 的流程知识、排障定位与单仓跨仓代码导航维护"
+  default_prompt: "使用 $project-knowledge-maintainer 从源码发现端到端流程，建立可用于排障、代码设计和业务理解的知识与代码导航。"

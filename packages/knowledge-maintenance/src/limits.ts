@@ -1,0 +1,2 @@
+export const DEFAULT_GIT_TIMEOUT_MS = 30000;
+export const DEFAULT_GIT_MAX_OUTPUT_BYTES = 4 * 1024 * 1024; // 4MB
