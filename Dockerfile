@@ -39,10 +39,6 @@ RUN ad link /app/packages/knowledge-workspace && \
     ad link /app/packages/knowledge-inbox && \
     ad link /app/packages/knowledge-maintenance
 
-# 软链接维护驱动脚本到全局 PATH，方便从外部或 SSH 直接执行
-RUN ln -s /app/packages/knowledge-maintenance/scripts/run-maintenance.sh /usr/local/bin/run-maintenance.sh && \
-    chmod +x /usr/local/bin/run-maintenance.sh
-
 # 创建标准挂载目录与日志目录
 RUN mkdir -p /srv/workspace /srv/knowledge-inbox /etc/actiondock /var/log/actiondock
 

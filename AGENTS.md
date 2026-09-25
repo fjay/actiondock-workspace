@@ -5,7 +5,7 @@
 - **代码库分层结构**：
   - `packages/knowledge-workspace`：工作区能力包，提供基于 ripgrep 的工程代码与文档全文检索、受控文件分段直读、目录浏览、安全写入、受控编辑、删除移动、状态差异审查与断链校验。
   - `packages/knowledge-inbox`：反馈追加平面能力包，负责收集人工排障与日常运维产生的结构化候选文档并写入待审池。
-  - `packages/knowledge-maintenance`：特权维护平面能力包，包含双分支代码同步、差异扫描、文档发布提交与检查点推进动作及后台调度驱动脚本。
+  - `packages/knowledge-maintenance`：特权维护平面能力包，包含双分支代码同步、差异扫描、文档发布提交与检查点推进动作。
   - `host/knowledge-maintenance`：云主机宿主机封装脚本，供维护智能体连入宿主机时便捷调用容器内工具。
   - `config/repos.json.example`：多代码仓与系统知识仓清单配置模板。
   - `skills/project-knowledge-maintainer`：配套知识维护智能体技能规范与参考模板。
