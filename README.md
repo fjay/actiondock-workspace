@@ -1,10 +1,10 @@
 # knowledge-server
 
-[ActionDock](https://github.com/team4u/actiondock) 云主机一体化知识服务容器（All-in-One Knowledge Server Distribution）。
+[ActionDock](https://github.com/team4u/actiondock) 云主机一体化知识服务容器。
 
-本工程负责在云主机上以 Docker 容器化运行知识中枢，对外提供**原生 HTTPS（端口 443）**服务，并支持 Maintainer Agent 定时通过 SSH 反向触发自动化维护。
+本工程负责在云主机上以 Docker 容器化运行知识中枢，对外提供原生 HTTPS（端口 443）服务，并支持 Maintainer Agent 定时通过 SSH 反向触发自动化维护。
 
-> 📖 **深入理解架构**：系统核心设计哲学、三平面安全隔离与闭环演进背景，请参阅 [知识中枢设计理念与核心架构演进](docs/design.md)。
+> **深入理解架构**：系统核心设计哲学、三平面安全隔离与闭环演进，请参阅 [知识中枢设计理念与核心架构演进](docs/design.md)。
 
 ---
 
