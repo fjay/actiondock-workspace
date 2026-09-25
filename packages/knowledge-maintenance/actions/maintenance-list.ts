@@ -79,9 +79,9 @@ async function scanSingleRepo(
     }
 
     // 1. Determine target branch
+    const branches = await git.listBranchNames();
     let targetBranch = repoInput.branch ?? repoInput.sourceBranch;
     if (!targetBranch) {
-      const branches = await git.listBranchNames();
       if (branches.some((b) => b === "release" || b === "origin/release")) {
         targetBranch = "release";
       } else {
@@ -89,8 +89,14 @@ async function scanSingleRepo(
       }
     }
 
+    // 优先检查已同步的远程跟踪分支 origin/<targetBranch>
+    let commitBranch = targetBranch;
+    if (!commitBranch.startsWith("origin/") && branches.includes(`origin/${commitBranch}`)) {
+      commitBranch = `origin/${commitBranch}`;
+    }
+
     // 2. Resolve target branch HEAD commit
-    const toCommit = await git.getHeadCommit(targetBranch);
+    const toCommit = await git.getHeadCommit(commitBranch);
     const repoName = await getRepoIdentifier(git, resolvedPath);
 
     // 3. Read checkpoint from ctx.state
