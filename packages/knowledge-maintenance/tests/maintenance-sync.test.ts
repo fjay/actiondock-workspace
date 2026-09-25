@@ -783,6 +783,7 @@ describe("maintenance.sync", () => {
     try {
       const fakeDriver = new FakeProcessDriver();
       const executedCommands: string[] = [];
+      const commandTimeouts: { cmd: string; timeoutMs?: number }[] = [];
 
       fakeDriver.onSpawn = (handle: any, spec: any) => {
         const cmd = spec.args.join(" ");
@@ -825,8 +826,20 @@ describe("maintenance.sync", () => {
         handle.emitOutputClosed("natural");
       };
 
+      const platform = createTestPlatform({ processDriver: fakeDriver });
+      const origExecute = (platform.process as any).processManager.runExecutor.execute.bind(
+        (platform.process as any).processManager.runExecutor
+      );
+      (platform.process as any).processManager.runExecutor.execute = async (input: any, call: any) => {
+        commandTimeouts.push({
+          cmd: input.spec.args?.join(" ") ?? "",
+          timeoutMs: input.timeoutMs,
+        });
+        return origExecute(input, call);
+      };
+
       const runtime = createTestRuntime({
-        platform: createTestPlatform({ processDriver: fakeDriver }),
+        platform,
       });
 
       const res = await runtime.run(syncAction, {
@@ -852,6 +865,16 @@ describe("maintenance.sync", () => {
         "Must trigger blobless clone with url and target path"
       );
       assert.ok(executedCommands.includes("push origin docs"));
+
+      const cloneRun = commandTimeouts.find((c) => c.cmd.startsWith("clone"));
+      assert.ok(cloneRun, "Clone command must be executed");
+      assert.equal(cloneRun.timeoutMs, 300000, "Clone operation must default to 300000ms (5 minutes)");
+
+      const nonCloneRuns = commandTimeouts.filter((c) => !c.cmd.startsWith("clone"));
+      assert.ok(nonCloneRuns.length > 0, "Non-clone git commands must be executed");
+      for (const nonClone of nonCloneRuns) {
+        assert.equal(nonClone.timeoutMs, 30000, "Regular git operations must use default 30000ms");
+      }
     } finally {
       fs.rmSync(tmpBase, { recursive: true, force: true });
     }
@@ -910,13 +933,27 @@ describe("maintenance.sync", () => {
         handle.emitOutputClosed("natural");
       };
 
+      const platform = createTestPlatform({ processDriver: fakeDriver });
+      const commandTimeouts: { cmd: string; timeoutMs?: number }[] = [];
+      const origExecute = (platform.process as any).processManager.runExecutor.execute.bind(
+        (platform.process as any).processManager.runExecutor
+      );
+      (platform.process as any).processManager.runExecutor.execute = async (input: any, call: any) => {
+        commandTimeouts.push({
+          cmd: input.spec.args?.join(" ") ?? "",
+          timeoutMs: input.timeoutMs,
+        });
+        return origExecute(input, call);
+      };
+
       const runtime = createTestRuntime({
-        platform: createTestPlatform({ processDriver: fakeDriver }),
+        platform,
       });
 
       const res = await runtime.run(syncAction, {
         path: targetDir,
         url: remoteUrl,
+        cloneTimeoutMs: 600000,
         repoType: "code",
         sourceBranch: "release",
         knowledgeBranch: "docs",
@@ -935,6 +972,18 @@ describe("maintenance.sync", () => {
         "Must fallback to standard clone without filter"
       );
       assert.ok(executedCommands.includes("push origin docs"));
+
+      const cloneRuns = commandTimeouts.filter((c) => c.cmd.startsWith("clone"));
+      assert.ok(cloneRuns.length >= 2, "Both blobless and fallback clone must be recorded");
+      for (const run of cloneRuns) {
+        assert.equal(run.timeoutMs, 600000, "Clone operations must apply custom cloneTimeoutMs (600000ms)");
+      }
+
+      const nonCloneRuns = commandTimeouts.filter((c) => !c.cmd.startsWith("clone"));
+      assert.ok(nonCloneRuns.length > 0, "Non-clone git commands must be executed");
+      for (const run of nonCloneRuns) {
+        assert.equal(run.timeoutMs, 30000, "Regular git operations must use default 30000ms");
+      }
     } finally {
       fs.rmSync(tmpBase, { recursive: true, force: true });
     }
@@ -984,6 +1033,7 @@ describe("maintenance.sync", () => {
           url: "https://github.com/example/cloned-service.git",
           repoType: "system_knowledge",
           sourceBranch: "master",
+          cloneTimeoutMs: 450000,
         },
       ])
     );
@@ -991,6 +1041,7 @@ describe("maintenance.sync", () => {
     try {
       const fakeDriver = new FakeProcessDriver();
       const executedCommands: string[] = [];
+      const commandTimeouts: { cmd: string; timeoutMs?: number }[] = [];
 
       fakeDriver.onSpawn = (handle: any, spec: any) => {
         const cmd = spec.args.join(" ");
@@ -1019,8 +1070,20 @@ describe("maintenance.sync", () => {
         handle.emitOutputClosed("natural");
       };
 
+      const platform = createTestPlatform({ processDriver: fakeDriver });
+      const origExecute = (platform.process as any).processManager.runExecutor.execute.bind(
+        (platform.process as any).processManager.runExecutor
+      );
+      (platform.process as any).processManager.runExecutor.execute = async (input: any, call: any) => {
+        commandTimeouts.push({
+          cmd: input.spec.args?.join(" ") ?? "",
+          timeoutMs: input.timeoutMs,
+        });
+        return origExecute(input, call);
+      };
+
       const runtime = createTestRuntime({
-        platform: createTestPlatform({ processDriver: fakeDriver }),
+        platform,
       });
 
       const res = await runtime.run(syncAction, {
@@ -1033,6 +1096,16 @@ describe("maintenance.sync", () => {
       assert.equal(res.summary?.syncedCount, 1);
       assert.equal(res.results?.[0]?.cloned, true);
       assert.ok(executedCommands.some((c) => c.startsWith("clone --filter=blob:none")));
+
+      const cloneRun = commandTimeouts.find((c) => c.cmd.startsWith("clone"));
+      assert.ok(cloneRun, "Clone command must be executed in batch mode");
+      assert.equal(cloneRun.timeoutMs, 450000, "Batch clone must use cloneTimeoutMs configured in repos.json (450000ms)");
+
+      const nonCloneRuns = commandTimeouts.filter((c) => !c.cmd.startsWith("clone"));
+      assert.ok(nonCloneRuns.length > 0, "Non-clone git commands must be executed");
+      for (const nonClone of nonCloneRuns) {
+        assert.equal(nonClone.timeoutMs, 30000, "Regular git operations must use default 30000ms");
+      }
     } finally {
       fs.rmSync(tmpBase, { recursive: true, force: true });
     }

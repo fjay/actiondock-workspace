@@ -11,6 +11,11 @@
       "description": "Default timeout in milliseconds for git operations (default: 30000)",
       "env": "GIT_TIMEOUT_MS"
     },
+    "GIT_CLONE_TIMEOUT_MS": {
+      "type": "integer",
+      "description": "Default timeout in milliseconds for git clone operations (default: 300000, 5 minutes)",
+      "env": "GIT_CLONE_TIMEOUT_MS"
+    },
     "GIT_MAX_OUTPUT_BYTES": {
       "type": "integer",
       "description": "Maximum bytes collected from git command output (default: 4194304)",
@@ -87,6 +92,10 @@
               true,
               false
             ]
+          },
+          "cloneTimeoutMs": {
+            "type": "integer",
+            "description": "Custom timeout in milliseconds for git clone operations if cloning is required"
           }
         }
       },

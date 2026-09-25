@@ -3,7 +3,7 @@ import path from "node:path";
 import type { ActionContext } from "@actiondock/sdk";
 import { decodeText } from "@actiondock/sdk";
 import { MaintenanceError } from "./errors.ts";
-import { DEFAULT_GIT_TIMEOUT_MS, DEFAULT_GIT_MAX_OUTPUT_BYTES } from "./limits.ts";
+import { DEFAULT_GIT_TIMEOUT_MS, DEFAULT_GIT_CLONE_TIMEOUT_MS, DEFAULT_GIT_MAX_OUTPUT_BYTES } from "./limits.ts";
 
 export interface GitRunnerOptions {
   cwd?: string;
@@ -214,7 +214,7 @@ export class GitClient {
     targetPath: string,
     options?: GitCloneOptions
   ): Promise<GitExecResult> {
-    const timeoutMs = options?.timeoutMs ?? DEFAULT_GIT_TIMEOUT_MS;
+    const timeoutMs = options?.timeoutMs ?? DEFAULT_GIT_CLONE_TIMEOUT_MS;
     const maxOutputBytes = options?.maxOutputBytes ?? DEFAULT_GIT_MAX_OUTPUT_BYTES;
 
     if (ctx.signal.aborted) {
@@ -329,7 +329,6 @@ export class GitClient {
     options?: GitCloneOptions
   ): Promise<GitExecResult> {
     return GitClient.clone(this.ctx, url, targetPath ?? this.defaultCwd, {
-      timeoutMs: this.defaultTimeoutMs,
       maxOutputBytes: this.defaultMaxOutputBytes,
       ...options,
     });

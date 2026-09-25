@@ -4,6 +4,7 @@ import { defineAction, type ActionContext } from "@actiondock/sdk";
 import type { ActionInput, ActionOutput } from "../.actiondock/generated/actions.d.ts";
 import { GitClient } from "../src/git.ts";
 import { resolveRepoPath, detectRepoType } from "../src/repo-utils.ts";
+import { DEFAULT_GIT_CLONE_TIMEOUT_MS } from "../src/limits.ts";
 
 export type Input = ActionInput<"maintenance.sync">;
 export type Output = ActionOutput<"maintenance.sync">;
@@ -15,6 +16,7 @@ interface RepoSyncConfig {
   sourceBranch?: string;
   knowledgeBranch?: string;
   filterBlobNone?: boolean;
+  cloneTimeoutMs?: number;
 }
 
 type SingleRepoResult = {
@@ -55,6 +57,8 @@ async function syncSingleRepo(
   }
 
   const timeoutMs = ctx.config.get<number>("GIT_TIMEOUT_MS", 30000);
+  const cloneTimeoutMs =
+    repoInput.cloneTimeoutMs ?? ctx.config.get<number>("GIT_CLONE_TIMEOUT_MS", DEFAULT_GIT_CLONE_TIMEOUT_MS);
   const maxOutputBytes = ctx.config.get<number>("GIT_MAX_OUTPUT_BYTES", 4 * 1024 * 1024);
   const defaultBlobless = ctx.config.get<boolean>("GIT_BLOBLESS_FETCH", true);
   const useBlobless = repoInput.filterBlobNone ?? defaultBlobless;
@@ -84,7 +88,7 @@ async function syncSingleRepo(
     const cloneRes = await GitClient.clone(ctx, repoInput.url, resolvedPath, {
       filterBlobNone: useBlobless,
       branch: repoInput.sourceBranch,
-      timeoutMs,
+      timeoutMs: cloneTimeoutMs,
       maxOutputBytes,
     });
 
@@ -394,6 +398,7 @@ export default defineAction<Input, Output>(async (input, ctx) => {
         ...(input.sourceBranch !== undefined ? { sourceBranch: input.sourceBranch } : {}),
         ...(input.knowledgeBranch !== undefined ? { knowledgeBranch: input.knowledgeBranch } : {}),
         ...(input.filterBlobNone !== undefined ? { filterBlobNone: input.filterBlobNone } : {}),
+        ...(input.cloneTimeoutMs !== undefined ? { cloneTimeoutMs: input.cloneTimeoutMs } : {}),
       },
       ctx
     );
@@ -438,6 +443,7 @@ export default defineAction<Input, Output>(async (input, ctx) => {
             ...(item.sourceBranch ? { sourceBranch: item.sourceBranch } : {}),
             ...(item.knowledgeBranch ? { knowledgeBranch: item.knowledgeBranch } : {}),
             ...(item.filterBlobNone !== undefined ? { filterBlobNone: item.filterBlobNone } : {}),
+            ...(typeof item.cloneTimeoutMs === "number" ? { cloneTimeoutMs: item.cloneTimeoutMs } : {}),
           });
         }
       }
@@ -524,6 +530,11 @@ export default defineAction<Input, Output>(async (input, ctx) => {
             ? { filterBlobNone: repoConfig.filterBlobNone }
             : input.filterBlobNone !== undefined
             ? { filterBlobNone: input.filterBlobNone }
+            : {}),
+          ...(repoConfig.cloneTimeoutMs !== undefined
+            ? { cloneTimeoutMs: repoConfig.cloneTimeoutMs }
+            : input.cloneTimeoutMs !== undefined
+            ? { cloneTimeoutMs: input.cloneTimeoutMs }
             : {}),
         },
         ctx
