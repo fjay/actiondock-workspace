@@ -1,4 +1,6 @@
-import { defineAction, encodeStateKey } from "@actiondock/sdk";
+import fs from "node:fs";
+import path from "node:path";
+import { defineAction, encodeStateKey, type ActionContext } from "@actiondock/sdk";
 import type { ActionInput, ActionOutput } from "../.actiondock/generated/actions.d.ts";
 import { GitClient } from "../src/git.ts";
 import {
@@ -12,133 +14,354 @@ import { MaintenanceError } from "../src/errors.ts";
 export type Input = ActionInput<"maintenance.list">;
 export type Output = ActionOutput<"maintenance.list">;
 
-export default defineAction<Input, Output>(async (input, ctx) => {
-  ctx.log.info("Starting maintenance.list", { path: input.path, branch: input.branch });
+interface RepoScanConfig {
+  path: string;
+  branch?: string | undefined;
+  sourceBranch?: string | undefined;
+}
 
-  const resolvedPath = resolveRepoPath(input.path);
-  const timeoutMs = ctx.config.get<number>("GIT_TIMEOUT_MS", 30000);
-  const maxOutputBytes = ctx.config.get<number>("GIT_MAX_OUTPUT_BYTES", 4 * 1024 * 1024);
-  const git = new GitClient(ctx, resolvedPath, timeoutMs, maxOutputBytes);
+type SingleRepoScanResult = {
+  status: "changed" | "initial" | "upToDate" | "error";
+  path: string;
+  repo?: string;
+  branch?: string;
+  hasChanges: boolean;
+  from?: string | null;
+  to?: string;
+  commitCount?: number;
+  initialInventoryRequired?: boolean;
+  commits?: Array<{
+    hash: string;
+    shortHash: string;
+    message: string;
+    author?: string;
+    date?: string;
+  }>;
+  changedFilesSummary?: {
+    summaryText?: string;
+    filesChanged?: number;
+    insertions?: number;
+    deletions?: number;
+    files?: Array<{
+      file: string;
+      changes: string;
+    }>;
+  };
+  message: string;
+};
 
-  const isWorkTree = await git.isInsideWorkTree();
-  if (!isWorkTree) {
-    throw new MaintenanceError(
-      `Path is not a valid git repository: ${resolvedPath}`,
-      "INVALID_REPO",
-      400
-    );
-  }
-
-  // 1. Determine target branch
-  let targetBranch = input.branch;
-  if (!targetBranch) {
-    const branches = await git.listBranchNames();
-    if (branches.some((b) => b === "release" || b === "origin/release")) {
-      targetBranch = "release";
-    } else {
-      targetBranch = "master";
-    }
-  }
-
-  // 2. Resolve target branch HEAD commit
-  const toCommit = await git.getHeadCommit(targetBranch);
-  const repoName = await getRepoIdentifier(git, resolvedPath);
-
-  // 3. Read checkpoint from ctx.state
-  const stateKey = encodeStateKey("checkpoints", repoName);
-  let savedState = await ctx.state.get<any>(stateKey);
-
-  // Fallback to unnamespaced key if needed
-  if (!savedState) {
-    savedState = await ctx.state.get<any>(repoName);
-  }
-
-  let fromCommit: string | null = null;
-  if (typeof savedState === "string") {
-    fromCommit = savedState;
-  } else if (savedState && typeof savedState.commit === "string") {
-    fromCommit = savedState.commit;
-  }
-
+/**
+ * Scans a single repository for pending commits since checkpoint.
+ */
+async function scanSingleRepo(
+  repoInput: RepoScanConfig,
+  ctx: ActionContext,
+  throwOnError = false
+): Promise<SingleRepoScanResult> {
   ctx.log.info("Inspecting repository maintenance status", {
-    repo: repoName,
-    branch: targetBranch,
-    from: fromCommit,
-    to: toCommit,
+    path: repoInput.path,
+    branch: repoInput.branch,
   });
 
-  // Strategy B: No prior checkpoint found -> full initial inventory required
-  if (!fromCommit) {
-    ctx.log.info(`No prior checkpoint found for repository ${repoName}; initial inventory needed`);
-    const countRes = await git.run(["rev-list", "--count", toCommit]);
-    const totalCommits = parseInt(countRes.stdout.trim() || "0", 10);
+  try {
+    const resolvedPath = resolveRepoPath(repoInput.path);
+    const timeoutMs = ctx.config.get<number>("GIT_TIMEOUT_MS", 30000);
+    const maxOutputBytes = ctx.config.get<number>("GIT_MAX_OUTPUT_BYTES", 4 * 1024 * 1024);
+    const git = new GitClient(ctx, resolvedPath, timeoutMs, maxOutputBytes);
 
-    return {
-      hasChanges: true,
-      path: resolvedPath,
+    const isWorkTree = await git.isInsideWorkTree();
+    if (!isWorkTree) {
+      throw new MaintenanceError(
+        `Path is not a valid git repository: ${resolvedPath}`,
+        "INVALID_REPO",
+        400
+      );
+    }
+
+    // 1. Determine target branch
+    let targetBranch = repoInput.branch ?? repoInput.sourceBranch;
+    if (!targetBranch) {
+      const branches = await git.listBranchNames();
+      if (branches.some((b) => b === "release" || b === "origin/release")) {
+        targetBranch = "release";
+      } else {
+        targetBranch = "master";
+      }
+    }
+
+    // 2. Resolve target branch HEAD commit
+    const toCommit = await git.getHeadCommit(targetBranch);
+    const repoName = await getRepoIdentifier(git, resolvedPath);
+
+    // 3. Read checkpoint from ctx.state
+    const stateKey = encodeStateKey("checkpoints", repoName);
+    let savedState = await ctx.state.get<any>(stateKey);
+
+    // Fallback to unnamespaced key if needed
+    if (!savedState) {
+      savedState = await ctx.state.get<any>(repoName);
+    }
+
+    let fromCommit: string | null = null;
+    if (typeof savedState === "string") {
+      fromCommit = savedState;
+    } else if (savedState && typeof savedState.commit === "string") {
+      fromCommit = savedState.commit;
+    }
+
+    ctx.log.info("Resolved repository checkpoint and target commit", {
       repo: repoName,
       branch: targetBranch,
-      from: null,
+      from: fromCommit,
       to: toCommit,
-      commitCount: totalCommits,
-      initialInventoryRequired: true,
-      commits: [],
-      message: `Initial maintenance check: no checkpoint found in state, full inventory required (${totalCommits} total commits in branch)`,
-    };
-  }
+    });
 
-  // Checkpoint matches current HEAD -> no pending changes
-  if (fromCommit === toCommit) {
-    ctx.log.info(`Repository ${repoName} is already up to date at checkpoint ${fromCommit}`);
+    // Strategy B: No prior checkpoint found -> full initial inventory required
+    if (!fromCommit) {
+      ctx.log.info(`No prior checkpoint found for repository ${repoName}; initial inventory needed`);
+      const countRes = await git.run(["rev-list", "--count", toCommit]);
+      const totalCommits = parseInt(countRes.stdout.trim() || "0", 10);
+
+      return {
+        status: "initial",
+        hasChanges: true,
+        path: resolvedPath,
+        repo: repoName,
+        branch: targetBranch,
+        from: null,
+        to: toCommit,
+        commitCount: totalCommits,
+        initialInventoryRequired: true,
+        commits: [],
+        message: `Initial maintenance check: no checkpoint found in state, full inventory required (${totalCommits} total commits in branch)`,
+      };
+    }
+
+    // Checkpoint matches current HEAD -> no pending changes
+    if (fromCommit === toCommit) {
+      ctx.log.info(`Repository ${repoName} is already up to date at checkpoint ${fromCommit}`);
+      return {
+        status: "upToDate",
+        hasChanges: false,
+        path: resolvedPath,
+        repo: repoName,
+        branch: targetBranch,
+        from: fromCommit,
+        to: toCommit,
+        commitCount: 0,
+        initialInventoryRequired: false,
+        commits: [],
+        changedFilesSummary: {
+          summaryText: "0 files changed",
+          filesChanged: 0,
+          insertions: 0,
+          deletions: 0,
+          files: [],
+        },
+        message: "Repository is up to date with last checked commit",
+      };
+    }
+
+    // Checkpoint differs from HEAD -> compute diff and commits
+    ctx.log.info(`Fetching commits and file diff between ${fromCommit} and ${toCommit}...`);
+
+    const logRes = await git.run([
+      "log",
+      "--pretty=format:%H%x09%h%x09%an <%ae>%x09%aI%x09%s",
+      `${fromCommit}..${toCommit}`,
+    ]);
+    const commits = parseGitLog(logRes.stdout);
+
+    const diffRes = await git.run(["diff", "--stat", `${fromCommit}..${toCommit}`]);
+    const changedFilesSummary = parseDiffStat(diffRes.stdout);
+
+    const commitCount = commits.length > 0 ? commits.length : 1;
+
+    ctx.log.info(`Found ${commitCount} new commit(s) in ${repoName}`);
+
     return {
-      hasChanges: false,
+      status: "changed",
+      hasChanges: true,
       path: resolvedPath,
       repo: repoName,
       branch: targetBranch,
       from: fromCommit,
       to: toCommit,
-      commitCount: 0,
+      commitCount,
       initialInventoryRequired: false,
-      commits: [],
-      changedFilesSummary: {
-        summaryText: "0 files changed",
-        filesChanged: 0,
-        insertions: 0,
-        deletions: 0,
-        files: [],
+      commits,
+      changedFilesSummary,
+      message: `Found ${commitCount} new commit(s) since last checkpoint`,
+    };
+  } catch (err: any) {
+    if (throwOnError) {
+      throw err;
+    }
+    const errorMsg = err.message || String(err);
+    ctx.log.error("Failed scanning repository", { path: repoInput.path, error: errorMsg });
+    return {
+      status: "error",
+      path: repoInput.path,
+      hasChanges: false,
+      message: errorMsg,
+    };
+  }
+}
+
+export default defineAction<Input, Output>(async (input, ctx) => {
+  // 1. Single repository mode: completely backward-compatible execution
+  if (input.path !== undefined && input.path !== null) {
+    return scanSingleRepo(
+      {
+        path: input.path,
+        branch: input.branch,
       },
-      message: "Repository is up to date with last checked commit",
+      ctx,
+      true
+    );
+  }
+
+  // 2. Batch mode: resolve repository configurations
+  ctx.log.info("Starting maintenance.list in batch mode", { config: input.config });
+
+  let configFilePath: string | undefined;
+  if (input.config && typeof input.config === "string" && input.config.trim() !== "") {
+    configFilePath = path.resolve(input.config.trim());
+  } else if (fs.existsSync("/etc/actiondock/repos.json")) {
+    configFilePath = "/etc/actiondock/repos.json";
+  }
+
+  const reposToScan: RepoScanConfig[] = [];
+
+  if (configFilePath && fs.existsSync(configFilePath)) {
+    ctx.log.info("Reading batch repository configuration from file", { configFilePath });
+    try {
+      const rawContent = fs.readFileSync(configFilePath, "utf8");
+      const parsed = JSON.parse(rawContent);
+      if (!Array.isArray(parsed)) {
+        ctx.log.error("Configuration file must contain an array of repositories", { configFilePath });
+        return {
+          batch: true,
+          hasChanges: false,
+          summary: { total: 0, changedCount: 0, initialCount: 0, upToDateCount: 0, errorCount: 1 },
+          results: [],
+          message: `Invalid configuration file: expected JSON array in ${configFilePath}`,
+        };
+      }
+      for (const item of parsed) {
+        if (typeof item === "string" && item.trim()) {
+          reposToScan.push({ path: item.trim() });
+        } else if (item && typeof item.path === "string" && item.path.trim()) {
+          reposToScan.push({
+            path: item.path.trim(),
+            ...(item.branch ? { branch: item.branch } : {}),
+            ...(item.sourceBranch ? { branch: item.sourceBranch } : {}),
+          });
+        }
+      }
+    } catch (err: any) {
+      ctx.log.error("Failed to read or parse configuration file", { configFilePath, error: err.message });
+      return {
+        batch: true,
+        hasChanges: false,
+        summary: { total: 0, changedCount: 0, initialCount: 0, upToDateCount: 0, errorCount: 1 },
+        results: [],
+        message: `Failed to read configuration file ${configFilePath}: ${err.message}`,
+      };
+    }
+  } else {
+    // Config file not provided or does not exist: auto-scan WORKSPACE_ROOT
+    const workspaceRoot = process.env.WORKSPACE_ROOT;
+    if (workspaceRoot && fs.existsSync(workspaceRoot)) {
+      ctx.log.info("Scanning WORKSPACE_ROOT for git repositories", { workspaceRoot });
+      try {
+        const entries = fs.readdirSync(workspaceRoot, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            const subDirPath = path.join(workspaceRoot, entry.name);
+            const gitDir = path.join(subDirPath, ".git");
+            if (fs.existsSync(gitDir)) {
+              reposToScan.push({ path: subDirPath });
+            }
+          }
+        }
+        reposToScan.sort((a, b) => a.path.localeCompare(b.path));
+      } catch (err: any) {
+        ctx.log.error("Failed to scan WORKSPACE_ROOT", { workspaceRoot, error: err.message });
+      }
+    }
+  }
+
+  if (reposToScan.length === 0) {
+    ctx.log.warn("No repositories found for batch scanning");
+    return {
+      batch: true,
+      hasChanges: false,
+      summary: { total: 0, changedCount: 0, initialCount: 0, upToDateCount: 0, errorCount: 0 },
+      results: [],
+      message: "No repositories found for batch scanning",
     };
   }
 
-  // Checkpoint differs from HEAD -> compute diff and commits
-  ctx.log.info(`Fetching commits and file diff between ${fromCommit} and ${toCommit}...`);
+  // 3. Process each repository sequentially
+  const results: NonNullable<Output["results"]> = [];
+  let changedCount = 0;
+  let initialCount = 0;
+  let upToDateCount = 0;
+  let errorCount = 0;
 
-  const logRes = await git.run([
-    "log",
-    "--pretty=format:%H%x09%h%x09%an <%ae>%x09%aI%x09%s",
-    `${fromCommit}..${toCommit}`,
-  ]);
-  const commits = parseGitLog(logRes.stdout);
+  for (const repoConfig of reposToScan) {
+    ctx.log.info("Batch scanning repository", { path: repoConfig.path });
+    const singleResult = await scanSingleRepo(
+      {
+        path: repoConfig.path,
+        branch: repoConfig.branch ?? input.branch,
+      },
+      ctx,
+      false
+    );
 
-  const diffRes = await git.run(["diff", "--stat", `${fromCommit}..${toCommit}`]);
-  const changedFilesSummary = parseDiffStat(diffRes.stdout);
+    results.push(singleResult);
 
-  const commitCount = commits.length > 0 ? commits.length : 1;
+    if (singleResult.status === "changed") {
+      changedCount++;
+    } else if (singleResult.status === "initial") {
+      initialCount++;
+    } else if (singleResult.status === "upToDate") {
+      upToDateCount++;
+    } else {
+      errorCount++;
+    }
+  }
 
-  ctx.log.info(`Found ${commitCount} new commit(s) in ${repoName}`);
+  // 4. Determine overall hasChanges and summary
+  const hasChanges = changedCount > 0 || initialCount > 0;
+
+  const summary = {
+    total: reposToScan.length,
+    changedCount,
+    initialCount,
+    upToDateCount,
+    errorCount,
+  };
+
+  let message: string;
+  if (changedCount === 0 && initialCount === 0 && errorCount === 0) {
+    message = `All ${upToDateCount} repositories are up to date`;
+  } else {
+    const parts: string[] = [];
+    if (changedCount > 0) parts.push(`${changedCount} changed`);
+    if (initialCount > 0) parts.push(`${initialCount} initial`);
+    if (upToDateCount > 0) parts.push(`${upToDateCount} up to date`);
+    if (errorCount > 0) parts.push(`${errorCount} error(s)`);
+    message = `Batch scan completed: ${parts.join(", ")} across ${reposToScan.length} repositories`;
+  }
 
   return {
-    hasChanges: true,
-    path: resolvedPath,
-    repo: repoName,
-    branch: targetBranch,
-    from: fromCommit,
-    to: toCommit,
-    commitCount,
-    initialInventoryRequired: false,
-    commits,
-    changedFilesSummary,
-    message: `Found ${commitCount} new commit(s) since last checkpoint`,
+    batch: true,
+    hasChanges,
+    summary,
+    results,
+    message,
   };
 });

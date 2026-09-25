@@ -1,4 +1,6 @@
-import { defineAction } from "@actiondock/sdk";
+import fs from "node:fs";
+import path from "node:path";
+import { defineAction, type ActionContext } from "@actiondock/sdk";
 import type { ActionInput, ActionOutput } from "../.actiondock/generated/actions.d.ts";
 import { GitClient } from "../src/git.ts";
 import { resolveRepoPath, detectRepoType } from "../src/repo-utils.ts";
@@ -6,18 +8,45 @@ import { resolveRepoPath, detectRepoType } from "../src/repo-utils.ts";
 export type Input = ActionInput<"maintenance.sync">;
 export type Output = ActionOutput<"maintenance.sync">;
 
-export default defineAction<Input, Output>(async (input, ctx) => {
-  ctx.log.info("Starting maintenance.sync", { path: input.path });
+interface RepoSyncConfig {
+  path: string;
+  repoType?: "code" | "system_knowledge";
+  sourceBranch?: string;
+  knowledgeBranch?: string;
+  filterBlobNone?: boolean;
+}
+
+type SingleRepoResult = {
+  status: "success" | "dirty_worktree" | "conflict" | "error";
+  path: string;
+  repoType?: "code" | "system_knowledge";
+  sourceBranch?: string;
+  knowledgeBranch?: string;
+  currentCommit?: string;
+  uncommittedFiles?: string[];
+  conflictFiles?: string[];
+  initializedBranch?: boolean;
+  message: string;
+};
+
+/**
+ * Synchronizes a single repository according to its architecture type (code dual-branch or system_knowledge single-branch).
+ */
+async function syncSingleRepo(
+  repoInput: RepoSyncConfig,
+  ctx: ActionContext
+): Promise<SingleRepoResult> {
+  ctx.log.info("Starting maintenance.sync for repository", { path: repoInput.path });
 
   let resolvedPath: string;
   try {
-    resolvedPath = resolveRepoPath(input.path);
+    resolvedPath = resolveRepoPath(repoInput.path);
   } catch (err: any) {
     ctx.log.error("Failed to resolve repository path", { error: err.message });
     return {
       status: "error",
-      path: input.path,
-      repoType: input.repoType ?? "code",
+      path: repoInput.path,
+      ...(repoInput.repoType ? { repoType: repoInput.repoType } : { repoType: "code" as const }),
       message: err.message,
     };
   }
@@ -33,7 +62,7 @@ export default defineAction<Input, Output>(async (input, ctx) => {
     return {
       status: "error",
       path: resolvedPath,
-      repoType: input.repoType ?? "code",
+      ...(repoInput.repoType ? { repoType: repoInput.repoType } : { repoType: "code" as const }),
       message: `Path is not a valid git repository: ${resolvedPath}`,
     };
   }
@@ -48,16 +77,16 @@ export default defineAction<Input, Output>(async (input, ctx) => {
     return {
       status: "dirty_worktree",
       path: resolvedPath,
-      repoType: input.repoType ?? "code",
+      ...(repoInput.repoType ? { repoType: repoInput.repoType } : { repoType: "code" as const }),
       uncommittedFiles: dirtyFiles,
       message: "Working tree is dirty; synchronization aborted to prevent uncommitted changes from being lost",
     };
   }
 
   // 3. Resolve repository type and branch configurations
-  const repoType = input.repoType ?? (await detectRepoType(git, input.knowledgeBranch));
-  const sourceBranch = input.sourceBranch ?? (repoType === "code" ? "release" : "master");
-  const knowledgeBranch = repoType === "code" ? (input.knowledgeBranch ?? "docs") : undefined;
+  const repoType = repoInput.repoType ?? (await detectRepoType(git, repoInput.knowledgeBranch));
+  const sourceBranch = repoInput.sourceBranch ?? (repoType === "code" ? "release" : "master");
+  const knowledgeBranch = repoType === "code" ? (repoInput.knowledgeBranch ?? "docs") : undefined;
 
   ctx.log.info(`Syncing repository (${repoType})`, {
     resolvedPath,
@@ -68,7 +97,7 @@ export default defineAction<Input, Output>(async (input, ctx) => {
 
   // 4. Fetch origin (Blobless Partial Fetch with automatic fallback)
   const defaultBlobless = ctx.config.get<boolean>("GIT_BLOBLESS_FETCH", true);
-  const useBlobless = input.filterBlobNone ?? defaultBlobless;
+  const useBlobless = repoInput.filterBlobNone ?? defaultBlobless;
   ctx.log.info(`Fetching from remote origin (blobless: ${useBlobless})...`);
   const fetchResult = await git.fetchOrigin({ filterBlobNone: useBlobless });
   if (fetchResult.code !== 0) {
@@ -230,9 +259,9 @@ export default defineAction<Input, Output>(async (input, ctx) => {
     const statusRes = await git.run(["status", "--porcelain"]);
     const conflictFiles = statusRes.stdout
       .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => /^(UU|AA|UD|DU|DD|AU|UA)/.test(line))
-      .map((line) => line.slice(3).trim())
+      .map((line: string) => line.trim())
+      .filter((line: string) => /^(UU|AA|UD|DU|DD|AU|UA)/.test(line))
+      .map((line: string) => line.slice(3).trim())
       .filter(Boolean);
 
     ctx.log.info("Safely aborting merge via git merge --abort...");
@@ -276,4 +305,208 @@ export default defineAction<Input, Output>(async (input, ctx) => {
     initializedBranch: false,
     message: `Successfully synchronized '${sourceBranch}' into '${docsBranch}' and pushed to remote origin`,
   };
+}
+
+export default defineAction<Input, Output>(async (input, ctx) => {
+  // 1. Single repository mode: completely backward-compatible execution
+  if (input.path !== undefined && input.path !== null) {
+    return syncSingleRepo(
+      {
+        path: input.path,
+        ...(input.repoType !== undefined ? { repoType: input.repoType } : {}),
+        ...(input.sourceBranch !== undefined ? { sourceBranch: input.sourceBranch } : {}),
+        ...(input.knowledgeBranch !== undefined ? { knowledgeBranch: input.knowledgeBranch } : {}),
+        ...(input.filterBlobNone !== undefined ? { filterBlobNone: input.filterBlobNone } : {}),
+      },
+      ctx
+    );
+  }
+
+  // 2. Batch mode: resolve repository configurations
+  ctx.log.info("Starting maintenance.sync in batch mode", { config: input.config });
+
+  let configFilePath: string | undefined;
+  if (input.config && typeof input.config === "string" && input.config.trim() !== "") {
+    configFilePath = path.resolve(input.config.trim());
+  } else if (fs.existsSync("/etc/actiondock/repos.json")) {
+    configFilePath = "/etc/actiondock/repos.json";
+  }
+
+  const reposToSync: RepoSyncConfig[] = [];
+
+  if (configFilePath && fs.existsSync(configFilePath)) {
+    ctx.log.info("Reading batch repository configuration from file", { configFilePath });
+    try {
+      const rawContent = fs.readFileSync(configFilePath, "utf8");
+      const parsed = JSON.parse(rawContent);
+      if (!Array.isArray(parsed)) {
+        ctx.log.error("Configuration file must contain an array of repositories", { configFilePath });
+        return {
+          batch: true,
+          status: "error",
+          summary: { total: 0, syncedCount: 0, conflictCount: 0, errorCount: 1 },
+          results: [],
+          conflicts: [],
+          message: `Invalid configuration file: expected JSON array in ${configFilePath}`,
+        };
+      }
+      for (const item of parsed) {
+        if (typeof item === "string" && item.trim()) {
+          reposToSync.push({ path: item.trim() });
+        } else if (item && typeof item.path === "string" && item.path.trim()) {
+          reposToSync.push({
+            path: item.path.trim(),
+            ...(item.repoType ? { repoType: item.repoType } : {}),
+            ...(item.sourceBranch ? { sourceBranch: item.sourceBranch } : {}),
+            ...(item.knowledgeBranch ? { knowledgeBranch: item.knowledgeBranch } : {}),
+            ...(item.filterBlobNone !== undefined ? { filterBlobNone: item.filterBlobNone } : {}),
+          });
+        }
+      }
+    } catch (err: any) {
+      ctx.log.error("Failed to read or parse configuration file", { configFilePath, error: err.message });
+      return {
+        batch: true,
+        status: "error",
+        summary: { total: 0, syncedCount: 0, conflictCount: 0, errorCount: 1 },
+        results: [],
+        conflicts: [],
+        message: `Failed to read configuration file ${configFilePath}: ${err.message}`,
+      };
+    }
+  } else {
+    // Config file not provided or does not exist: auto-scan WORKSPACE_ROOT
+    const workspaceRoot = process.env.WORKSPACE_ROOT;
+    if (workspaceRoot && fs.existsSync(workspaceRoot)) {
+      ctx.log.info("Scanning WORKSPACE_ROOT for git repositories", { workspaceRoot });
+      try {
+        const entries = fs.readdirSync(workspaceRoot, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            const subDirPath = path.join(workspaceRoot, entry.name);
+            const gitDir = path.join(subDirPath, ".git");
+            if (fs.existsSync(gitDir)) {
+              reposToSync.push({ path: subDirPath });
+            }
+          }
+        }
+        reposToSync.sort((a, b) => a.path.localeCompare(b.path));
+      } catch (err: any) {
+        ctx.log.error("Failed to scan WORKSPACE_ROOT", { workspaceRoot, error: err.message });
+      }
+    }
+  }
+
+  if (reposToSync.length === 0) {
+    ctx.log.warn("No repositories found for batch synchronization");
+    return {
+      batch: true,
+      status: "error",
+      summary: { total: 0, syncedCount: 0, conflictCount: 0, errorCount: 0 },
+      results: [],
+      conflicts: [],
+      message: "No repositories found for batch synchronization",
+    };
+  }
+
+  // 3. Process each repository sequentially
+  const results: NonNullable<Output["results"]> = [];
+  const conflicts: NonNullable<Output["conflicts"]> = [];
+  let syncedCount = 0;
+  let conflictCount = 0;
+  let errorCount = 0;
+
+  for (const repoConfig of reposToSync) {
+    ctx.log.info("Batch synchronizing repository", { path: repoConfig.path });
+    try {
+      const singleResult = await syncSingleRepo(
+        {
+          path: repoConfig.path,
+          ...(repoConfig.repoType !== undefined
+            ? { repoType: repoConfig.repoType }
+            : input.repoType !== undefined
+            ? { repoType: input.repoType }
+            : {}),
+          ...(repoConfig.sourceBranch !== undefined
+            ? { sourceBranch: repoConfig.sourceBranch }
+            : input.sourceBranch !== undefined
+            ? { sourceBranch: input.sourceBranch }
+            : {}),
+          ...(repoConfig.knowledgeBranch !== undefined
+            ? { knowledgeBranch: repoConfig.knowledgeBranch }
+            : input.knowledgeBranch !== undefined
+            ? { knowledgeBranch: input.knowledgeBranch }
+            : {}),
+          ...(repoConfig.filterBlobNone !== undefined
+            ? { filterBlobNone: repoConfig.filterBlobNone }
+            : input.filterBlobNone !== undefined
+            ? { filterBlobNone: input.filterBlobNone }
+            : {}),
+        },
+        ctx
+      );
+
+      results.push(singleResult);
+
+      if (singleResult.status === "success") {
+        syncedCount++;
+      } else if (singleResult.status === "conflict") {
+        conflictCount++;
+        conflicts.push({
+          path: singleResult.path,
+          ...(singleResult.sourceBranch ? { sourceBranch: singleResult.sourceBranch } : {}),
+          ...(singleResult.knowledgeBranch ? { knowledgeBranch: singleResult.knowledgeBranch } : {}),
+          conflictFiles: singleResult.conflictFiles ?? [],
+        });
+      } else {
+        errorCount++;
+      }
+    } catch (err: any) {
+      const errorMsg = err.message || String(err);
+      ctx.log.error("Unexpected error syncing repository in batch", { path: repoConfig.path, error: errorMsg });
+      results.push({
+        status: "error",
+        path: repoConfig.path,
+        ...(repoConfig.repoType ? { repoType: repoConfig.repoType } : {}),
+        message: errorMsg,
+      });
+      errorCount++;
+    }
+  }
+
+  // 4. Determine overall status and summary
+  let overallStatus: "success" | "conflict" | "error";
+  if (conflictCount > 0) {
+    overallStatus = "conflict";
+  } else if (errorCount > 0) {
+    overallStatus = "error";
+  } else {
+    overallStatus = "success";
+  }
+
+  const summary = {
+    total: reposToSync.length,
+    syncedCount,
+    conflictCount,
+    errorCount,
+  };
+
+  let message: string;
+  if (overallStatus === "success") {
+    message = `Successfully synchronized all ${syncedCount} repositories`;
+  } else if (overallStatus === "conflict") {
+    message = `Batch synchronization encountered merge conflicts in ${conflictCount} repository(ies)`;
+  } else {
+    message = `Batch synchronization completed with ${errorCount} error(s) out of ${reposToSync.length} repositories`;
+  }
+
+  return {
+    batch: true,
+    status: overallStatus,
+    summary,
+    results,
+    conflicts,
+    message,
+  };
 });
+

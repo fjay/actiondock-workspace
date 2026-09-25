@@ -373,10 +373,406 @@ describe("maintenance.sync", () => {
       });
 
       assert.equal(res.status, "success");
+      assert.equal(res.batch, undefined, "Single-repo mode should not set batch flag");
       assert.ok(executedCommands.includes("fetch --filter=blob:none origin"));
       assert.ok(executedCommands.includes("fetch origin"));
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it("batch synchronizes multiple repositories from config file successfully", async () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "sync-batch-ok-"));
+    const repoA = path.join(tmpBase, "repo-a");
+    const repoB = path.join(tmpBase, "repo-b");
+    const configFile = path.join(tmpBase, "repos.json");
+
+    fs.mkdirSync(repoA, { recursive: true });
+    fs.mkdirSync(repoB, { recursive: true });
+    fs.writeFileSync(
+      configFile,
+      JSON.stringify([
+        {
+          path: repoA,
+          repoType: "code",
+          sourceBranch: "release",
+          knowledgeBranch: "docs",
+        },
+        {
+          path: repoB,
+          repoType: "system_knowledge",
+          sourceBranch: "master",
+        },
+      ])
+    );
+
+    try {
+      const fakeDriver = new FakeProcessDriver();
+
+      fakeDriver.onSpawn = (handle: any, spec: any) => {
+        const cmd = spec.args.join(" ");
+        const cwd = spec.cwd;
+
+        if (cmd === "rev-parse --is-inside-work-tree") {
+          handle.emitOutput("stdout", "true\n");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "status --porcelain") {
+          handle.emitOutput("stdout", "");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "fetch --filter=blob:none origin" || cmd === "fetch origin") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cwd === repoA) {
+          if (cmd === "rev-parse --verify origin/docs") {
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "rev-parse --verify refs/heads/docs") {
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "checkout docs") {
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "merge --ff-only origin/docs") {
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "merge --no-edit origin/release") {
+            handle.emitOutput("stdout", "Merge made by the 'ort' strategy.\n");
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "push origin docs") {
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "rev-parse HEAD") {
+            handle.emitOutput("stdout", "aaaa111122223333444455556666777788889999\n");
+            handle.emitExit({ code: 0, signal: null });
+          } else {
+            handle.emitExit({ code: 0, signal: null });
+          }
+        } else if (cwd === repoB) {
+          if (cmd === "rev-parse --verify refs/heads/master") {
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "checkout master") {
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "merge --ff-only origin/master") {
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "rev-parse HEAD") {
+            handle.emitOutput("stdout", "bbbb111122223333444455556666777788889999\n");
+            handle.emitExit({ code: 0, signal: null });
+          } else {
+            handle.emitExit({ code: 0, signal: null });
+          }
+        } else {
+          handle.emitExit({ code: 0, signal: null });
+        }
+        handle.emitOutputClosed("natural");
+      };
+
+      const runtime = createTestRuntime({
+        platform: createTestPlatform({ processDriver: fakeDriver }),
+      });
+
+      const res = await runtime.run(syncAction, {
+        config: configFile,
+      });
+
+      assert.equal(res.batch, true);
+      assert.equal(res.status, "success");
+      assert.equal(res.summary?.total, 2);
+      assert.equal(res.summary?.syncedCount, 2);
+      assert.equal(res.summary?.conflictCount, 0);
+      assert.equal(res.summary?.errorCount, 0);
+      assert.equal(res.results?.length, 2);
+      assert.equal(res.results?.[0]?.status, "success");
+      assert.equal(res.results?.[0]?.path, repoA);
+      assert.equal(res.results?.[1]?.status, "success");
+      assert.equal(res.results?.[1]?.path, repoB);
+      assert.deepEqual(res.conflicts, []);
+      assert.ok(res.message.includes("Successfully synchronized all 2 repositories"));
+    } finally {
+      fs.rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  it("batch synchronizes with merge conflict and records conflict status and files", async () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "sync-batch-conflict-"));
+    const repoOk = path.join(tmpBase, "repo-ok");
+    const repoConflict = path.join(tmpBase, "repo-conflict");
+    const configFile = path.join(tmpBase, "repos.json");
+
+    fs.mkdirSync(repoOk, { recursive: true });
+    fs.mkdirSync(repoConflict, { recursive: true });
+    fs.writeFileSync(
+      configFile,
+      JSON.stringify([
+        {
+          path: repoOk,
+          repoType: "code",
+          sourceBranch: "release",
+          knowledgeBranch: "docs",
+        },
+        {
+          path: repoConflict,
+          repoType: "code",
+          sourceBranch: "release",
+          knowledgeBranch: "docs",
+        },
+      ])
+    );
+
+    try {
+      const fakeDriver = new FakeProcessDriver();
+      const executedCommands: string[] = [];
+
+      fakeDriver.onSpawn = (handle: any, spec: any) => {
+        const cmd = spec.args.join(" ");
+        const cwd = spec.cwd;
+
+        if (cmd === "rev-parse --is-inside-work-tree") {
+          handle.emitOutput("stdout", "true\n");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "fetch --filter=blob:none origin" || cmd === "fetch origin") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cwd === repoOk) {
+          if (cmd === "status --porcelain") {
+            handle.emitOutput("stdout", "");
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "rev-parse --verify origin/docs" || cmd === "rev-parse --verify refs/heads/docs") {
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "checkout docs" || cmd === "merge --ff-only origin/docs") {
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "merge --no-edit origin/release") {
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "push origin docs") {
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "rev-parse HEAD") {
+            handle.emitOutput("stdout", "cccc111122223333444455556666777788889999\n");
+            handle.emitExit({ code: 0, signal: null });
+          } else {
+            handle.emitExit({ code: 0, signal: null });
+          }
+        } else if (cwd === repoConflict) {
+          if (cmd === "status --porcelain") {
+            if (executedCommands.includes(`[${repoConflict}] merge --no-edit origin/release`)) {
+              handle.emitOutput("stdout", "UU docs/flow.md\nUU docs/api.md\n");
+            } else {
+              handle.emitOutput("stdout", "");
+            }
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "rev-parse --verify origin/docs" || cmd === "rev-parse --verify refs/heads/docs") {
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "checkout docs" || cmd === "merge --ff-only origin/docs") {
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "merge --no-edit origin/release") {
+            executedCommands.push(`[${repoConflict}] merge --no-edit origin/release`);
+            handle.emitOutput("stderr", "CONFLICT (content): Merge conflict in docs/flow.md\n");
+            handle.emitExit({ code: 1, signal: null });
+          } else if (cmd === "merge --abort") {
+            handle.emitExit({ code: 0, signal: null });
+          } else {
+            handle.emitExit({ code: 0, signal: null });
+          }
+        } else {
+          handle.emitExit({ code: 0, signal: null });
+        }
+        handle.emitOutputClosed("natural");
+      };
+
+      const runtime = createTestRuntime({
+        platform: createTestPlatform({ processDriver: fakeDriver }),
+      });
+
+      const res = await runtime.run(syncAction, {
+        config: configFile,
+      });
+
+      assert.equal(res.batch, true);
+      assert.equal(res.status, "conflict");
+      assert.equal(res.summary?.total, 2);
+      assert.equal(res.summary?.syncedCount, 1);
+      assert.equal(res.summary?.conflictCount, 1);
+      assert.equal(res.summary?.errorCount, 0);
+      assert.equal(res.conflicts?.length, 1);
+      assert.equal(res.conflicts?.[0]?.path, repoConflict);
+      assert.deepEqual(res.conflicts?.[0]?.conflictFiles, ["docs/flow.md", "docs/api.md"]);
+      assert.ok(res.message.includes("merge conflicts in 1 repository"));
+    } finally {
+      fs.rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  it("batch synchronizes with error repository and summarizes as error status", async () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "sync-batch-err-"));
+    const repoOk = path.join(tmpBase, "repo-ok");
+    const repoDirty = path.join(tmpBase, "repo-dirty");
+    const configFile = path.join(tmpBase, "repos.json");
+
+    fs.mkdirSync(repoOk, { recursive: true });
+    fs.mkdirSync(repoDirty, { recursive: true });
+    fs.writeFileSync(
+      configFile,
+      JSON.stringify([
+        { path: repoOk, repoType: "system_knowledge", sourceBranch: "master" },
+        { path: repoDirty, repoType: "code", sourceBranch: "release" },
+      ])
+    );
+
+    try {
+      const fakeDriver = new FakeProcessDriver();
+
+      fakeDriver.onSpawn = (handle: any, spec: any) => {
+        const cmd = spec.args.join(" ");
+        const cwd = spec.cwd;
+
+        if (cmd === "rev-parse --is-inside-work-tree") {
+          handle.emitOutput("stdout", "true\n");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cwd === repoDirty) {
+          if (cmd === "status --porcelain") {
+            handle.emitOutput("stdout", " M uncommitted.ts\n");
+            handle.emitExit({ code: 0, signal: null });
+          } else {
+            handle.emitExit({ code: 0, signal: null });
+          }
+        } else if (cwd === repoOk) {
+          if (cmd === "status --porcelain") {
+            handle.emitOutput("stdout", "");
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "fetch --filter=blob:none origin" || cmd === "fetch origin") {
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "rev-parse --verify refs/heads/master") {
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "checkout master" || cmd === "merge --ff-only origin/master") {
+            handle.emitExit({ code: 0, signal: null });
+          } else if (cmd === "rev-parse HEAD") {
+            handle.emitOutput("stdout", "dddd111122223333444455556666777788889999\n");
+            handle.emitExit({ code: 0, signal: null });
+          } else {
+            handle.emitExit({ code: 0, signal: null });
+          }
+        } else {
+          handle.emitExit({ code: 0, signal: null });
+        }
+        handle.emitOutputClosed("natural");
+      };
+
+      const runtime = createTestRuntime({
+        platform: createTestPlatform({ processDriver: fakeDriver }),
+      });
+
+      const res = await runtime.run(syncAction, {
+        config: configFile,
+      });
+
+      assert.equal(res.batch, true);
+      assert.equal(res.status, "error");
+      assert.equal(res.summary?.total, 2);
+      assert.equal(res.summary?.syncedCount, 1);
+      assert.equal(res.summary?.conflictCount, 0);
+      assert.equal(res.summary?.errorCount, 1);
+      assert.deepEqual(res.conflicts, []);
+      assert.equal(res.results?.[1]?.status, "dirty_worktree");
+      assert.ok(res.message.includes("1 error(s)"));
+    } finally {
+      fs.rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  it("batch synchronizes via WORKSPACE_ROOT scan when config file does not exist", async () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "sync-batch-ws-"));
+    const repo1 = path.join(tmpBase, "repo1");
+    const repo2 = path.join(tmpBase, "repo2");
+    fs.mkdirSync(path.join(repo1, ".git"), { recursive: true });
+    fs.mkdirSync(path.join(repo2, ".git"), { recursive: true });
+
+    const prevWorkspaceRoot = process.env.WORKSPACE_ROOT;
+    process.env.WORKSPACE_ROOT = tmpBase;
+
+    try {
+      const fakeDriver = new FakeProcessDriver();
+
+      fakeDriver.onSpawn = (handle: any, spec: any) => {
+        const cmd = spec.args.join(" ");
+
+        if (cmd === "rev-parse --is-inside-work-tree") {
+          handle.emitOutput("stdout", "true\n");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "status --porcelain") {
+          handle.emitOutput("stdout", "");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "fetch --filter=blob:none origin" || cmd === "fetch origin") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "branch --list") {
+          handle.emitOutput("stdout", "* master\n");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "branch -r") {
+          handle.emitOutput("stdout", "  origin/master\n");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "rev-parse --verify refs/heads/master") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "checkout master" || cmd === "merge --ff-only origin/master") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "rev-parse HEAD") {
+          handle.emitOutput("stdout", "eeee111122223333444455556666777788889999\n");
+          handle.emitExit({ code: 0, signal: null });
+        } else {
+          handle.emitExit({ code: 0, signal: null });
+        }
+        handle.emitOutputClosed("natural");
+      };
+
+      const runtime = createTestRuntime({
+        platform: createTestPlatform({ processDriver: fakeDriver }),
+      });
+
+      // No path and non-existent config: falls back to WORKSPACE_ROOT scan
+      const res = await runtime.run(syncAction, {
+        config: "/nonexistent/config/path.json",
+      });
+
+      assert.equal(res.batch, true);
+      assert.equal(res.status, "success");
+      assert.equal(res.summary?.total, 2);
+      assert.equal(res.summary?.syncedCount, 2);
+      assert.equal(res.summary?.conflictCount, 0);
+      assert.equal(res.summary?.errorCount, 0);
+      assert.equal(res.results?.length, 2);
+    } finally {
+      if (prevWorkspaceRoot !== undefined) {
+        process.env.WORKSPACE_ROOT = prevWorkspaceRoot;
+      } else {
+        delete process.env.WORKSPACE_ROOT;
+      }
+      fs.rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  it("returns error envelope when configuration file is invalid or no repositories found", async () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "sync-batch-invalid-"));
+    const invalidConfigFile = path.join(tmpBase, "invalid.json");
+    fs.writeFileSync(invalidConfigFile, "{ not an array }");
+
+    const prevWorkspaceRoot = process.env.WORKSPACE_ROOT;
+    delete process.env.WORKSPACE_ROOT;
+
+    try {
+      const runtime = createTestRuntime({
+        platform: createTestPlatform({ processDriver: new FakeProcessDriver() }),
+      });
+
+      // 1. Invalid JSON config
+      const resInvalid = await runtime.run(syncAction, {
+        config: invalidConfigFile,
+      });
+      assert.equal(resInvalid.batch, true);
+      assert.equal(resInvalid.status, "error");
+      assert.equal(resInvalid.summary?.errorCount, 1);
+      assert.ok(resInvalid.message.includes("Failed to read configuration file"));
+
+      // 2. No repositories found (no config, no WORKSPACE_ROOT)
+      const resEmpty = await runtime.run(syncAction, {});
+      assert.equal(resEmpty.batch, true);
+      assert.equal(resEmpty.status, "error");
+      assert.equal(resEmpty.summary?.total, 0);
+      assert.ok(resEmpty.message.includes("No repositories found"));
+    } finally {
+      if (prevWorkspaceRoot !== undefined) {
+        process.env.WORKSPACE_ROOT = prevWorkspaceRoot;
+      }
+      fs.rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
 });
+

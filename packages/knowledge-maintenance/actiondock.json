@@ -28,16 +28,21 @@
       "description": "Synchronize code or system knowledge repositories with remote origin, performing branch fast-forward or release-to-docs merge, and safely aborting on conflict without hard resets or force pushes.",
       "inputSchema": {
         "type": "object",
-        "required": [
-          "path"
-        ],
         "properties": {
           "path": {
             "type": "string",
-            "description": "Local repository workspace directory path",
+            "description": "Local repository workspace directory path (optional; if omitted, batch mode is executed)",
             "examples": [
               "/srv/workspace/order-service",
               "/srv/workspace/system-knowledge"
+            ]
+          },
+          "config": {
+            "type": "string",
+            "description": "Path to repository configuration JSON file (defaults to /etc/actiondock/repos.json if omitted)",
+            "examples": [
+              "/etc/actiondock/repos.json",
+              "/srv/workspace/config/repos.json"
             ]
           },
           "repoType": {
@@ -81,8 +86,6 @@
         "type": "object",
         "required": [
           "status",
-          "path",
-          "repoType",
           "message"
         ],
         "properties": {
@@ -96,9 +99,13 @@
             ],
             "description": "Synchronization outcome status: 'success' (synced and pushed), 'dirty_worktree' (uncommitted changes detected), 'conflict' (merge conflict detected and aborted), or 'error' (fatal git/execution failure)"
           },
+          "batch": {
+            "type": "boolean",
+            "description": "Whether synchronization was executed in batch mode across multiple repositories"
+          },
           "path": {
             "type": "string",
-            "description": "Resolved repository root path"
+            "description": "Resolved repository root path (for single-repo mode)"
           },
           "repoType": {
             "type": "string",
@@ -137,6 +144,136 @@
           "initializedBranch": {
             "type": "boolean",
             "description": "Whether the knowledge branch was newly created and initialized on remote"
+          },
+          "summary": {
+            "type": "object",
+            "required": [
+              "total",
+              "syncedCount",
+              "conflictCount",
+              "errorCount"
+            ],
+            "properties": {
+              "total": {
+                "type": "integer",
+                "description": "Total number of repositories processed"
+              },
+              "syncedCount": {
+                "type": "integer",
+                "description": "Number of successfully synchronized repositories"
+              },
+              "conflictCount": {
+                "type": "integer",
+                "description": "Number of repositories with merge conflicts"
+              },
+              "errorCount": {
+                "type": "integer",
+                "description": "Number of repositories with errors or dirty worktrees"
+              }
+            },
+            "description": "Batch synchronization summary statistics"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "status",
+                "path",
+                "message"
+              ],
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "success",
+                    "dirty_worktree",
+                    "conflict",
+                    "error"
+                  ],
+                  "description": "Outcome status of single repository sync"
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Repository path"
+                },
+                "repoType": {
+                  "type": "string",
+                  "enum": [
+                    "code",
+                    "system_knowledge"
+                  ],
+                  "description": "Repository architecture type"
+                },
+                "sourceBranch": {
+                  "type": "string",
+                  "description": "Source iteration branch"
+                },
+                "knowledgeBranch": {
+                  "type": "string",
+                  "description": "Knowledge branch"
+                },
+                "currentCommit": {
+                  "type": "string",
+                  "description": "Commit hash after sync"
+                },
+                "uncommittedFiles": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "List of uncommitted files if dirty"
+                },
+                "conflictFiles": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "List of conflicting files if conflict"
+                },
+                "initializedBranch": {
+                  "type": "boolean",
+                  "description": "Whether branch was newly initialized"
+                },
+                "message": {
+                  "type": "string",
+                  "description": "Human-readable summary of repository sync"
+                }
+              }
+            },
+            "description": "Detailed execution results for each repository in batch mode"
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "path",
+                "conflictFiles"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Repository path where merge conflict occurred"
+                },
+                "sourceBranch": {
+                  "type": "string",
+                  "description": "Source branch"
+                },
+                "knowledgeBranch": {
+                  "type": "string",
+                  "description": "Knowledge branch"
+                },
+                "conflictFiles": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "List of conflicting files"
+                }
+              }
+            },
+            "description": "List of conflicting repositories and their conflicting files"
           },
           "message": {
             "type": "string",
@@ -196,6 +333,44 @@
             ],
             "message": "Merge conflict detected while merging origin/release into docs; merge was safely aborted"
           }
+        },
+        {
+          "title": "Batch synchronize multiple repositories with summary and conflict reporting",
+          "input": {
+            "config": "/etc/actiondock/repos.json"
+          },
+          "output": {
+            "status": "success",
+            "batch": true,
+            "summary": {
+              "total": 2,
+              "syncedCount": 2,
+              "conflictCount": 0,
+              "errorCount": 0
+            },
+            "results": [
+              {
+                "status": "success",
+                "path": "/srv/workspace/order-service",
+                "repoType": "code",
+                "sourceBranch": "release",
+                "knowledgeBranch": "docs",
+                "currentCommit": "d4e5f607182930415263748596a7b8c9d0e1f2a3",
+                "initializedBranch": false,
+                "message": "Successfully synchronized 'release' into 'docs' and pushed to remote origin"
+              },
+              {
+                "status": "success",
+                "path": "/srv/workspace/system-knowledge",
+                "repoType": "system_knowledge",
+                "sourceBranch": "master",
+                "currentCommit": "a1b2c3d4e5f607182930415263748596a7b8c9d0",
+                "message": "Successfully synchronized system knowledge branch 'master' via fast-forward merge"
+              }
+            ],
+            "conflicts": [],
+            "message": "Batch synchronization completed: 2 of 2 repositories synchronized successfully"
+          }
         }
       ]
     },
@@ -204,15 +379,20 @@
       "description": "Scan repository target branch against the last knowledge-checked commit checkpoint, returning pending code change diffs and commit summaries for maintainer agent inspection.",
       "inputSchema": {
         "type": "object",
-        "required": [
-          "path"
-        ],
         "properties": {
           "path": {
             "type": "string",
-            "description": "Local repository workspace directory path",
+            "description": "Local repository workspace directory path (optional; if omitted, batch mode is executed)",
             "examples": [
               "/srv/workspace/order-service"
+            ]
+          },
+          "config": {
+            "type": "string",
+            "description": "Path to repository configuration JSON file (defaults to /etc/actiondock/repos.json if omitted)",
+            "examples": [
+              "/etc/actiondock/repos.json",
+              "/srv/workspace/config/repos.json"
             ]
           },
           "branch": {
@@ -228,18 +408,16 @@
       "outputSchema": {
         "type": "object",
         "required": [
-          "hasChanges",
-          "path",
-          "repo",
-          "branch",
-          "to",
-          "commitCount",
           "message"
         ],
         "properties": {
           "hasChanges": {
             "type": "boolean",
             "description": "Whether there are new uninspected commits since the last checkpoint"
+          },
+          "batch": {
+            "type": "boolean",
+            "description": "Whether change scan was executed in batch mode across multiple repositories"
           },
           "path": {
             "type": "string",
@@ -347,6 +525,177 @@
             },
             "description": "Summary of file modifications between from and to"
           },
+          "summary": {
+            "type": "object",
+            "required": [
+              "total",
+              "changedCount",
+              "initialCount",
+              "upToDateCount",
+              "errorCount"
+            ],
+            "properties": {
+              "total": {
+                "type": "integer",
+                "description": "Total number of repositories scanned"
+              },
+              "changedCount": {
+                "type": "integer",
+                "description": "Number of repositories with new pending commits"
+              },
+              "initialCount": {
+                "type": "integer",
+                "description": "Number of repositories requiring initial full inventory"
+              },
+              "upToDateCount": {
+                "type": "integer",
+                "description": "Number of repositories already up to date with checkpoint"
+              },
+              "errorCount": {
+                "type": "integer",
+                "description": "Number of repositories with errors or invalid state"
+              }
+            },
+            "description": "Batch scan summary statistics"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "status",
+                "path",
+                "message"
+              ],
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "changed",
+                    "initial",
+                    "upToDate",
+                    "error"
+                  ],
+                  "description": "Maintenance scan status of repository"
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Repository workspace path"
+                },
+                "repo": {
+                  "type": "string",
+                  "description": "Repository identifier or name"
+                },
+                "branch": {
+                  "type": "string",
+                  "description": "Inspected branch name"
+                },
+                "hasChanges": {
+                  "type": "boolean",
+                  "description": "Whether this repository has pending changes or requires initial inventory"
+                },
+                "from": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Checkpoint commit hash from ctx.state (null if initial run with no prior checkpoint)"
+                },
+                "to": {
+                  "type": "string",
+                  "description": "Current HEAD commit hash of the target branch"
+                },
+                "commitCount": {
+                  "type": "integer",
+                  "description": "Number of commits between from and to (or total commits up to HEAD for initial inventory)"
+                },
+                "initialInventoryRequired": {
+                  "type": "boolean",
+                  "description": "True if no checkpoint exists and full initial inventory is required (Strategy B)"
+                },
+                "commits": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "hash",
+                      "shortHash",
+                      "message"
+                    ],
+                    "properties": {
+                      "hash": {
+                        "type": "string",
+                        "description": "Full commit hash"
+                      },
+                      "shortHash": {
+                        "type": "string",
+                        "description": "Short commit hash"
+                      },
+                      "message": {
+                        "type": "string",
+                        "description": "Commit subject message"
+                      },
+                      "author": {
+                        "type": "string",
+                        "description": "Author name and email"
+                      },
+                      "date": {
+                        "type": "string",
+                        "description": "Commit date in ISO 8601 format"
+                      }
+                    }
+                  },
+                  "description": "List of commits between from and to"
+                },
+                "changedFilesSummary": {
+                  "type": "object",
+                  "properties": {
+                    "summaryText": {
+                      "type": "string",
+                      "description": "Raw diff stat summary line (e.g. '5 files changed, 42 insertions(+), 12 deletions(-)')"
+                    },
+                    "filesChanged": {
+                      "type": "integer",
+                      "description": "Total count of modified files"
+                    },
+                    "insertions": {
+                      "type": "integer",
+                      "description": "Total inserted lines"
+                    },
+                    "deletions": {
+                      "type": "integer",
+                      "description": "Total deleted lines"
+                    },
+                    "files": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "file",
+                          "changes"
+                        ],
+                        "properties": {
+                          "file": {
+                            "type": "string"
+                          },
+                          "changes": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "description": "File-by-file diff stat entries"
+                    }
+                  },
+                  "description": "Summary of file modifications between from and to"
+                },
+                "message": {
+                  "type": "string",
+                  "description": "Human-readable status summary for this repository"
+                }
+              }
+            },
+            "description": "Detailed execution results for each repository in batch mode"
+          },
           "message": {
             "type": "string",
             "description": "Human-readable status summary"
@@ -438,6 +787,71 @@
             "initialInventoryRequired": false,
             "commits": [],
             "message": "Repository is up to date with last checked commit"
+          }
+        },
+        {
+          "title": "Batch scan multiple repositories for maintenance status",
+          "input": {
+            "config": "/etc/actiondock/repos.json"
+          },
+          "output": {
+            "batch": true,
+            "hasChanges": true,
+            "summary": {
+              "total": 3,
+              "changedCount": 1,
+              "initialCount": 1,
+              "upToDateCount": 1,
+              "errorCount": 0
+            },
+            "results": [
+              {
+                "status": "changed",
+                "path": "/srv/workspace/order-service",
+                "repo": "order-service",
+                "branch": "release",
+                "hasChanges": true,
+                "from": "a1b2c3d4e5f607182930415263748596a7b8c9d0",
+                "to": "b2c3d4e5f607182930415263748596a7b8c9d0e1",
+                "commitCount": 2,
+                "initialInventoryRequired": false,
+                "commits": [
+                  {
+                    "hash": "b2c3d4e5f607182930415263748596a7b8c9d0e1",
+                    "shortHash": "b2c3d4e",
+                    "message": "feat: update budget validation logic"
+                  }
+                ],
+                "message": "Found 2 new commit(s) since last checkpoint"
+              },
+              {
+                "status": "initial",
+                "path": "/srv/workspace/cron-service",
+                "repo": "cron-service",
+                "branch": "release",
+                "hasChanges": true,
+                "from": null,
+                "to": "c3d4e5f607182930415263748596a7b8c9d0e1f2",
+                "commitCount": 42,
+                "initialInventoryRequired": true,
+                "commits": [],
+                "message": "Initial maintenance check: no checkpoint found in state, full inventory required (42 total commits in branch)"
+              },
+              {
+                "status": "upToDate",
+                "path": "/srv/workspace/system-knowledge",
+                "repo": "system-knowledge",
+                "branch": "master",
+                "hasChanges": false,
+                "from": "d4e5f607182930415263748596a7b8c9d0e1f2a3",
+                "to": "d4e5f607182930415263748596a7b8c9d0e1f2a3",
+                "commitCount": 0,
+                "initialInventoryRequired": false,
+                "commits": [],
+                "message": "Repository is up to date with last checked commit"
+              }
+            ],
+            "message": "Batch scan completed: 1 changed, 1 initial, 1 up to date across 3 repositories"
           }
         }
       ]
