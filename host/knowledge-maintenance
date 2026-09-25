@@ -19,7 +19,7 @@ show_help() {
 说明：
   knowledge-maintenance 是云主机宿主机环境下的 ActionDock 动作调用包装脚本。
   支持在宿主机直接调用容器内的特权维护动作与工作区动作，与容器内运行环境保持一致。
-  维护智能体也可通过远端 HTTPS 8443 端口与 skm 特权环境直连，执行相同的纯动作协议。
+  维护智能体也可通过远端 HTTPS 443 端口与 skm 特权视图直连，执行相同的纯动作协议。
 
 快捷指令映射：
   - sync -> maintenance.sync（仓库分支同步）
@@ -38,7 +38,7 @@ show_help() {
     knowledge-maintenance maintenance.complete -- path="/srv/workspace/my-repo" commit="<hash>" actionTaken="docs_updated" summary="..."
 
 远端直连方式：
-  - 维护智能体在受信任网络中可通过 ActionDock 客户端直连 8443 特权维护端口：
+  - 维护智能体在受信任网络中可通过 ActionDock 客户端直连 443 特权维护视图：
     ad run maintenance.sync --profile skm
 EOF
 }

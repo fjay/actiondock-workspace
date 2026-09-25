@@ -49,13 +49,12 @@ RUN mkdir -p /srv/workspace /srv/knowledge-inbox /etc/actiondock /var/log/action
 # 默认运行环境变量
 ENV NODE_ENV=production \
     PORT=443 \
-    AGENT_PORT=8443 \
     WORKSPACE_ROOT=/srv/workspace \
     KNOWLEDGE_INBOX_ROOT=/srv/knowledge-inbox \
     GIT_BLOBLESS_FETCH=true
 
-# 暴露原生 HTTPS 端口 (443 查询服务，8443 智能体维护服务)
-EXPOSE 443 8443
+# 暴露原生 HTTPS 端口 (443 单端口多视图服务)
+EXPOSE 443
 
 # 拷贝容器启动入口
 COPY entrypoint.sh /entrypoint.sh

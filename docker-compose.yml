@@ -8,10 +8,8 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-443}:443"
-      - "${AGENT_PORT:-8443}:8443"
     environment:
       - PORT=443
-      - AGENT_PORT=8443
       - ACTIONDOCK_TOKEN=${ACTIONDOCK_TOKEN:-actiondock-query-token}
       - ACTIONDOCK_AGENT_TOKEN=${ACTIONDOCK_AGENT_TOKEN:-actiondock-agent-token}
       - WORKSPACE_ROOT=/srv/workspace

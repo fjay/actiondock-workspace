@@ -2,9 +2,9 @@
 
 [ActionDock](https://github.com/team4u/actiondock) 云主机一体化知识服务容器。
 
-本工程负责在云主机上以 Docker 容器化运行知识中枢，支持双 HTTP 服务分流架构：面向外部查询用户通过动作级白名单提供原生 HTTPS（端口 443）只读检索服务；面向内部维护智能体提供具备完整读写与维护能力的受控服务（端口 8443），实现细粒度安全隔离与自动化闭环演进。
+本工程负责在云主机上以 Docker 容器化运行知识中枢，采用 ActionDock 原生单端口多视图（Virtual Views）架构：统一在单一原生 HTTPS（端口 443）上运行，通过请求中的 Bearer Token 自动匹配与隔离面向外部查询用户的只读白名单视图（query）与面向内部维护智能体的全量特权视图（skm），实现细粒度安全隔离与自动化闭环演进。
 
-> **深入理解架构**：系统核心设计哲学、双服务分流架构与闭环演进，请参阅 [知识中枢设计理念与核心架构演进](docs/design.md)。
+> **深入理解架构**：系统核心设计哲学、单端口多视图架构与闭环演进，请参阅 [知识中枢设计理念与核心架构演进](docs/design.md)。
 
 ---
 
@@ -13,19 +13,23 @@
 ```text
        本地开发者 / 排障智能体 / 客户端                   维护智能体 / 派发子智能体
                       │                                              │
-                      ▼  (HTTPS 443 / 查询令牌)                       ▼  (HTTPS 8443 / 维护令牌)
+                      ▼  (HTTPS 443 / 查询令牌)                       ▼  (HTTPS 443 / 维护令牌)
   ┌──────────────────────────────────────────────────────────────────────────────────────────┐
   │                               Cloud Host: knowledge-server                               │
   │                                                                                          │
-  │   ┌─────────────────────────────────────┐      ┌─────────────────────────────────────┐   │
-  │   │  ad serve -p 443 --https            │      │  ad serve -p 8443 --https           │   │
-  │   │  -A "workspace/search.rg,           │      │  -P workspace,knowledge,maintenance │   │
-  │   │      workspace/files.read,          │      │  -t <AGENT_TOKEN>                   │   │
-  │   │      workspace/files.list,          │      └──────────────────┬──────────────────┘   │
-  │   │      knowledge/knowledge.collect"   │                         │                      │
-  │   │  -t <QUERY_TOKEN>                   │                         │                      │
-  │   └──────────────────┬──────────────────┘                         │                      │
-  │                      │                                            │                      │
+  │   ┌──────────────────────────────────────────────────────────────────────────────────┐   │
+  │   │  ad serve -p 443 --https --views "<VIEWS_JSON>"                                  │   │
+  │   │  (单端口多视图：通过 Bearer Token 自动路由对应虚拟视图)                             │   │
+  │   └─────────────────────────────┬──────────────────────────────┬─────────────────────┘   │
+  │                                 │                              │                         │
+  │                                 ▼                              ▼                         │
+  │                 ┌──────────────────────────────┐ ┌──────────────────────────────┐        │
+  │                 │ query 虚拟视图 (白名单只读)   │ │ skm 虚拟视图 (特权受控维护)  │        │
+  │                 │ -A search.rg, files.read,    │ │ -P workspace,                │        │
+  │                 │    files.list,               │ │    knowledge,                │        │
+  │                 │    knowledge.collect         │ │    maintenance               │        │
+  │                 └──────────────┬───────────────┘ └──────────────┬───────────────┘        │
+  │                                │                                │                        │
   │       ┌──────────────┴──────────────┐              ┌──────────────┴──────────────┐       │
   │       ▼                             ▼              ▼                             ▼       │
   │  [工作区检索与读取]           [候选知识收集]   [工作区完整编辑与审查]         [候选归档与特权维护]   │
@@ -47,7 +51,7 @@
 knowledge-server/
 ├── Dockerfile                  # 基于 node:25-bookworm-slim 的一体化容器镜像
 ├── docker-compose.yml          # Docker Compose 编排文件
-├── entrypoint.sh               # 容器自举入口脚本，负责路由链接与双服务启动
+├── entrypoint.sh               # 容器自举入口脚本，负责路由链接与单端口多视图服务启动
 ├── package.json                # Monorepo 根清单，声明 npm workspaces
 ├── .env.example                # 环境变量配置模板
 ├── host/
@@ -90,17 +94,14 @@ cp .env.example .env
 ```
 根据云主机实际情况编辑 `.env`：
 ```dotenv
-# 查询服务鉴权令牌 (面向外部查询用户与排障智能体，动作级白名单只读检索)
+# 查询服务鉴权令牌 (面向外部查询用户与排障智能体，由 443 端口虚拟视图自动路由至 query 只读白名单视图)
 ACTIONDOCK_TOKEN=your-random-secure-query-token-here
 
-# 智能体受控维护服务鉴权令牌 (面向内部维护智能体与派发子智能体，具备完整读写与维护权限)
+# 智能体受控维护服务鉴权令牌 (面向内部维护智能体，由 443 端口虚拟视图自动路由至 skm 全量特权视图)
 ACTIONDOCK_AGENT_TOKEN=your-random-secure-agent-token-here
 
-# 查询服务外部暴露端口 (原生 HTTPS 监听，默认 443)
+# 服务外部暴露端口 (原生 HTTPS 单端口多视图模式，默认 443，通过不同 Bearer Token 自动由虚拟视图路由权限)
 PORT=443
-
-# 智能体维护服务外部暴露端口 (原生 HTTPS 监听，默认 8443)
-AGENT_PORT=8443
 
 # 宿主机持久化根目录 (所有子目录 workspace/、inbox/、config/、certs/、logs/ 均基于此目录自动创建与衍生，不给自定义)
 KNOWLEDGE_DATA_DIR=/data/knowledge
@@ -142,9 +143,9 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-容器启动后，将自动以双服务模式运行：
-- **查询服务**：在 `443` 端口上监听原生 HTTPS 请求，通过动作白名单严格收敛。
-- **智能体维护服务**：在 `8443` 端口上监听原生 HTTPS 请求，供内部维护智能体调用。
+容器启动后，将自动以单端口多视图模式运行：
+- **服务监听**：在 `443` 端口上监听原生 HTTPS 请求。
+- **权限隔离**：客户端请求携带 `ACTIONDOCK_TOKEN` 时自动路由至 `query` 视图（动作白名单严格收敛）；携带 `ACTIONDOCK_AGENT_TOKEN` 时自动路由至 `skm` 特权视图（完整维护权限）。
 > **证书说明**：若未挂载正式证书，ActionDock 会自动生成合法的自签名 TLS 证书运行。
 
 ---
@@ -155,11 +156,11 @@ docker compose logs -f
 
 ### 添加远端配置
 ```bash
-# 添加面向查询用户的检索配置 (端口 443)
+# 添加面向查询用户的检索配置 (统一端口 443)
 ad profile add sk -s https://<cloud-host-ip>:443 -t <ACTIONDOCK_TOKEN> -k -d "云端知识库查询服务"
 
-# 添加面向维护智能体的受控维护配置 (端口 8443)
-ad profile add skm -s https://<cloud-host-ip>:8443 -t <ACTIONDOCK_AGENT_TOKEN> -k -d "云端知识库维护服务"
+# 添加面向维护智能体的受控维护配置 (统一端口 443)
+ad profile add skm -s https://<cloud-host-ip>:443 -t <ACTIONDOCK_AGENT_TOKEN> -k -d "云端知识库维护服务"
 ```
 *(注：`-k` 用于信任自签名证书)*
 
@@ -178,7 +179,7 @@ ad run knowledge/knowledge.collect --profile sk --input-file candidate.json
 
 ## Maintainer Agent 自动化维护规程 (Action 驱动)
 
-Maintainer Agent 按预设周期唤起，通过面向维护智能体的受控服务（端口 8443，配置标识 `skm`）驱动维护闭环，全流程统一采用 ActionDock 纯动作规范，彻底摆脱 Docker 嵌套命令与无状态 Shell 脚本。
+Maintainer Agent 按预设周期唤起，通过面向维护智能体的受控维护配置（统一端口 443，配置标识 `skm`）驱动维护闭环，全流程统一采用 ActionDock 纯动作规范，彻底摆脱 Docker 嵌套命令与无状态 Shell 脚本。
 
 ### 核心动作速查 (面向 `skm` 维护服务)
 
@@ -281,7 +282,7 @@ knowledge-maintenance links.verify -- path=/srv/workspace/order-service
 
 ### 远端受控维护调用（通过 ActionDock 客户端）
 
-维护智能体在受信任网络中，通过 ActionDock 客户端直连维护端口（8443）执行纯动作维护闭环：
+维护智能体在受信任网络中，通过 ActionDock 客户端直连 443 端口特权维护视图（配置标识 `skm`）执行纯动作维护闭环：
 
 ```bash
 # 远端全量分支同步
