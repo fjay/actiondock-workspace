@@ -1,14 +1,14 @@
 # ActionDock Workspace
 
-面向智能体的只读安全工程工作区能力包，基于 [ActionDock](https://github.com/team4u/actiondock) 规范构建，提供高吞吐结构化 ripgrep 检索、受控分段文本读取与受限目录浏览能力。
+面向智能体的工程工作区能力包，基于 [ActionDock](https://github.com/team4u/actiondock) 规范构建，提供高吞吐结构化 ripgrep 检索、受控分段文本读取、受限目录浏览、文件写入与局部受控编辑能力。
 
 ## 核心定位与设计原则
 
-- **只读沙箱安全隔离**：严禁提供写入、移动、删除或任意 Shell 执行能力，专注于工程代码库的探索与排查。
+- **工作区沙箱安全隔离**：严禁任意 Shell 执行与跨边界越权访问，操作边界严格限制在工作区根目录内部。
 - **真实 ripgrep 原生语义**：参数直接映射 ripgrep 长参数规范，消除额外抽象层，保持智能体认知一致性。
 - **逻辑路径绝对隔离**：所有返回路径均归一化为相对于工作区根目录的相对路径，彻底隐藏宿主机物理文件路径。
 - **多层防护拦截**：内置符号链接逃逸校验、敏感凭据文件全局过滤与服务器硬限预算控制。
-- **全平台自适应寻址**：纯 Node.js 实现文件浏览与读取，全文检索支持环境变量覆盖、内置预编译程序探测与系统命令三级平滑降级。
+- **全平台自适应寻址**：纯 Node.js 实现文件浏览、读取、写入与编辑，全文检索支持环境变量覆盖、内置预编译程序探测与系统命令三级平滑降级。
 
 ## 核心动作列表
 
@@ -21,6 +21,27 @@
 - **受控目录浏览**：`files.list`（完全限定标识：`workspace/files.list`）
   - 核心参数：`path`、`depth`、`hidden`。
   - 特性：目录优先排序，输出文件字节大小，默认屏蔽隐藏项与内部敏感文件。
+- **文件安全写入**：`files.write`（完全限定标识：`workspace/files.write`）
+  - 核心参数：`path`、`content`、`createDirs`、`overwrite`。
+  - 特性：自动补齐父级目录，防越界与敏感文件拦截，支持全量覆盖与创建标记返回。
+- **局部受控编辑**：`files.edit`（完全限定标识：`workspace/files.edit`）
+  - 核心参数：`path`、`targetContent`、`replacementContent`、`allowMultiple`、`startLine`、`endLine`。
+  - 特性：基于目标文本块精准匹配替换，支持行号区间收敛搜索，多重匹配冲突保护与编码一致性保障。
+- **安全删除**：`files.delete`（完全限定标识：`workspace/files.delete`）
+  - 核心参数：`path`、`recursive`、`ignoreIfNotExists`。
+  - 特性：严格拦截根目录与敏感路径删除，支持目录递归删除保护与静默忽略缺失项控制。
+- **路径移动重命名**：`files.move`（完全限定标识：`workspace/files.move`）
+  - 核心参数：`from`、`to`、`overwrite`。
+  - 特性：跨目录自动补齐父级目录，在 Git 跟踪环境下优先执行 `git mv` 保留历史，否则回退为原子重命名。
+- **版本状态检查**：`git.status`（完全限定标识：`workspace/git.status`）
+  - 核心参数：`path`。
+  - 特性：受控提取结构化工作区与暂存区状态，支持按目录收敛视界并全局过滤敏感凭据文件。
+- **受控差异比对**：`git.diff`（完全限定标识：`workspace/git.diff`）
+  - 核心参数：`path`、`staged`、`statOnly`、`maxLines`、`maxBytes`。
+  - 特性：严格限制输出行数与字节预算，提供结构化变更文件数与行数统计，自动抹除敏感路径差异。
+- **链接引用校验**：`links.verify`（完全限定标识：`workspace/links.verify`）
+  - 核心参数：`path`、`checkAnchors`、`ignoreDirs`。
+  - 特性：零外部依赖确定性扫描 Markdown 相对文件与文档内标题锚点，过滤网络链接并精确定位失效链接位置与原因。
 
 ## 工作区根目录与限定配置
 
@@ -102,12 +123,12 @@ npm run typecheck
 
 ### 命令行调试调用
 
-#### 1. 扁平参数调用（推荐主流方式，杜绝终端引号与转义问题）
+#### 扁平参数调用（推荐调用方式，杜绝终端引号与转义问题）
 
-根据 ActionDock 规范，面向智能体与命令行的主流调用语法为扁平参数赋值（`ad run <action> [control-options] [-- <assignments...>]`）：
+根据 ActionDock 规范，面向智能体与命令行的推荐语法为扁平参数赋值（`ad run <action> [control-options] [-- <assignments...>]`）：
 - 控制选项与数据参数通过 `--` 协议边界隔离；
 - `path=value` 严格保留为字符串；
-- `path:=json` 严格解析为 JSON（数字、布尔、数组或对象）；
+- `path:=json` 严格解析为 JSON；
 - 数组索引支持点号连续编号（如 `paths.0=src`）或 JSON 数组（`paths:='["src"]'`）。
 
 ```bash
@@ -118,19 +139,25 @@ ad link .
 ad run search.rg -- pattern=WorkspacePathPolicy paths.0=src
 ad run files.read -- path=src/limits.ts startLine:=1 maxLines:=20
 ad run files.list -- path=src depth:=1
+ad run files.write -- path=notes/task.md content="待办事项清单"
+ad run files.edit -- path=notes/task.md targetContent="清单" replacementContent="汇总"
 
 # 带包限定前缀与 --json 机器模式输出调用
 ad run workspace/search.rg --json -- pattern=WorkspacePathPolicy paths.0=src
 ad run workspace/files.read --json -- path=src/limits.ts startLine:=1 maxLines:=20
 ad run workspace/files.list --json -- path=src depth:=1
+ad run workspace/files.write --json -- path=notes/task.md content="待办事项清单"
+ad run workspace/files.edit --json -- path=notes/task.md targetContent="清单" replacementContent="汇总"
 ```
 
-#### 2. 内联 JSON 调用（传统方式，与扁平参数严格互斥）
+#### 内联 JSON 调用（与扁平参数互斥）
 
 ```bash
 ad run search.rg --input '{"pattern":"WorkspacePathPolicy","paths":["src"]}'
 ad run files.read --input '{"path":"src/limits.ts","startLine":1,"maxLines":20}'
 ad run files.list --input '{"path":"src","depth":1}'
+ad run files.write --input '{"path":"notes/task.md","content":"待办事项清单"}'
+ad run files.edit --input '{"path":"notes/task.md","targetContent":"清单","replacementContent":"汇总"}'
 ```
 
 ### 构建与独立分发

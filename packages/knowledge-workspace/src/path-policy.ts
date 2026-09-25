@@ -68,6 +68,73 @@ export class WorkspacePathPolicy {
     // Check file existence
     if (!fs.existsSync(candidateAbsolute)) {
       if (options.allowNonExistent) {
+        // If candidate itself is a broken symlink, verify its target
+        let isSymlink = false;
+        try {
+          const lstat = fs.lstatSync(candidateAbsolute);
+          isSymlink = lstat.isSymbolicLink();
+        } catch {
+          // not a symlink / does not exist
+        }
+        if (isSymlink) {
+          try {
+            const linkTarget = fs.readlinkSync(candidateAbsolute);
+            const resolvedTarget = path.resolve(path.dirname(candidateAbsolute), linkTarget);
+            const relTarget = path.relative(this.realRoot, resolvedTarget);
+            const inside =
+              relTarget === "" ||
+              (relTarget !== ".." &&
+                !relTarget.startsWith(`..${path.sep}`) &&
+                !path.isAbsolute(relTarget));
+            if (!inside) {
+              throw new WorkspaceError(
+                `Symlink target resolves outside workspace root: ${candidatePath}`,
+                "SYMLINK_OUTSIDE_WORKSPACE",
+                403
+              );
+            }
+          } catch (err: any) {
+            if (err instanceof WorkspaceError) throw err;
+          }
+        }
+
+        // Check closest existing ancestor directory for symlink escape
+        let checkDir = path.dirname(candidateAbsolute);
+        while (!fs.existsSync(checkDir)) {
+          const nextDir = path.dirname(checkDir);
+          if (nextDir === checkDir) break;
+          checkDir = nextDir;
+        }
+        if (fs.existsSync(checkDir)) {
+          const realAncestor = fs.realpathSync(checkDir);
+          const relFromRealRoot = path.relative(this.realRoot, realAncestor);
+          const realInside =
+            relFromRealRoot === "" ||
+            (relFromRealRoot !== ".." &&
+              !relFromRealRoot.startsWith(`..${path.sep}`) &&
+              !path.isAbsolute(relFromRealRoot));
+
+          if (!realInside) {
+            throw new WorkspaceError(
+              `Symlink target resolves outside workspace root: ${candidatePath}`,
+              "SYMLINK_OUTSIDE_WORKSPACE",
+              403
+            );
+          }
+
+          const realRelPosix =
+            relFromRealRoot === ""
+              ? ""
+              : relFromRealRoot.split(path.sep).join("/");
+          if (realRelPosix && isSensitivePath(realRelPosix)) {
+            throw new WorkspaceError(
+              `Symlink target resolves to sensitive path: ${realRelPosix}`,
+              "SENSITIVE_PATH_DENIED",
+              403
+            );
+          }
+        }
+
         return {
           absolutePath: candidateAbsolute,
           relativePath: relativePosix,

@@ -217,7 +217,65 @@ describe("workspace/search.rg end-to-end integration via ad CLI with real ripgre
     }
   });
 
+  it("executes files.write and files.edit with flat argument assignments via ad CLI", () => {
+    const projectRoot = path.resolve(import.meta.dirname, "..");
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ws-e2e-edit-"));
+    try {
+      // Test files.write
+      const writeStdout = execFileSync(
+        "ad",
+        [
+          "run",
+          "files.write",
+          "--json",
+          "-c",
+          `WORKSPACE_ROOT=${tmpDir}`,
+          "--",
+          "path=docs/guide.txt",
+          "content=line1\nline2\nline3\n",
+        ],
+        {
+          cwd: projectRoot,
+          encoding: "utf8",
+        }
+      );
+      const writeParsed = JSON.parse(writeStdout);
+      assert.equal(writeParsed.ok, true);
+      assert.equal(writeParsed.data.path, "docs/guide.txt");
+      assert.equal(writeParsed.data.created, true);
+
+      // Test files.edit
+      const editStdout = execFileSync(
+        "ad",
+        [
+          "run",
+          "files.edit",
+          "--json",
+          "-c",
+          `WORKSPACE_ROOT=${tmpDir}`,
+          "--",
+          "path=docs/guide.txt",
+          "targetContent=line2",
+          "replacementContent=line2-updated",
+        ],
+        {
+          cwd: projectRoot,
+          encoding: "utf8",
+        }
+      );
+      const editParsed = JSON.parse(editStdout);
+      assert.equal(editParsed.ok, true);
+      assert.equal(editParsed.data.replacementsCount, 1);
+
+      const updated = fs.readFileSync(path.join(tmpDir, "docs/guide.txt"), "utf8");
+      assert.equal(updated, "line1\nline2-updated\nline3\n");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects unknown parameters due to additionalProperties false", () => {
+
     const projectRoot = path.resolve(import.meta.dirname, "..");
     assert.throws(() => {
       execFileSync(

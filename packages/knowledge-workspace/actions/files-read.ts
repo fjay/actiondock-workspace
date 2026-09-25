@@ -3,6 +3,7 @@ import readline from "node:readline";
 import { defineAction } from "@actiondock/sdk";
 import type { ActionInput, ActionOutput } from "../.actiondock/generated/actions.d.ts";
 import { WorkspacePathPolicy } from "../src/path-policy.ts";
+import { validateUtf8File } from "../src/file-policy.ts";
 import {
   DEFAULT_READ_LINES,
   MAX_READ_LINES,
@@ -13,46 +14,6 @@ import { WorkspaceError } from "../src/errors.ts";
 export type Input = ActionInput<"files.read">;
 export type Output = ActionOutput<"files.read">;
 
-/**
- * Validates that file is UTF-8 text and not binary.
- */
-function validateUtf8File(filePath: string, sizeBytes: number): void {
-  if (sizeBytes === 0) {
-    return;
-  }
-  const sampleSize = Math.min(sizeBytes, 8192);
-  const buffer = Buffer.alloc(sampleSize);
-  const fd = fs.openSync(filePath, "r");
-  try {
-    const bytesRead = fs.readSync(fd, buffer, 0, sampleSize, 0);
-    const slice = buffer.subarray(0, bytesRead);
-
-    // Binary check: contains 0x00 null byte
-    for (let i = 0; i < slice.length; i++) {
-      if (slice[i] === 0) {
-        throw new WorkspaceError(
-          "Binary file is not supported",
-          "UNSUPPORTED_BINARY_FILE",
-          415
-        );
-      }
-    }
-
-    // UTF-8 validation
-    const decoder = new TextDecoder("utf-8", { fatal: true });
-    try {
-      decoder.decode(slice, { stream: bytesRead < sizeBytes });
-    } catch {
-      throw new WorkspaceError(
-        "Non-UTF-8 text encoding is not supported",
-        "UNSUPPORTED_TEXT_ENCODING",
-        415
-      );
-    }
-  } finally {
-    fs.closeSync(fd);
-  }
-}
 
 export default defineAction<Input, Output>(async (input, ctx) => {
   const workspaceRoot = ctx.config.get<string>("WORKSPACE_ROOT", process.cwd());

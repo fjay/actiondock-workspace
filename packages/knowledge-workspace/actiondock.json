@@ -372,6 +372,546 @@
           "truncated"
         ]
       }
+    },
+    "files.write": {
+      "entry": "actions/files-write.ts",
+      "description": "Write UTF-8 text content to a file in the workspace. Supports automatic parent directory creation and overwrite control.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path to the file relative to the workspace root",
+            "examples": [
+              "src/new-file.ts",
+              "docs/notes.md"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "description": "Plain text content to write to the file",
+            "examples": [
+              "console.log('hello world');\n"
+            ]
+          },
+          "createDirs": {
+            "type": "boolean",
+            "description": "Whether to automatically create parent directories if they do not exist. Defaults to true.",
+            "default": true
+          },
+          "overwrite": {
+            "type": "boolean",
+            "description": "Whether to overwrite an existing file. Defaults to true.",
+            "default": true
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "path": "src/example.ts",
+            "content": "export const example = 1;\n",
+            "createDirs": true,
+            "overwrite": true
+          }
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Normalized path relative to the workspace root"
+          },
+          "bytesWritten": {
+            "type": "number",
+            "description": "Number of bytes written to the file"
+          },
+          "created": {
+            "type": "boolean",
+            "description": "Whether a new file was created"
+          }
+        },
+        "required": [
+          "path",
+          "bytesWritten",
+          "created"
+        ]
+      }
+    },
+    "files.edit": {
+      "entry": "actions/files-edit.ts",
+      "description": "Edit a file in the workspace by replacing target text content. Supports line range constraints and multiple replacements control.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path to the file relative to the workspace root",
+            "examples": [
+              "src/index.ts"
+            ]
+          },
+          "targetContent": {
+            "type": "string",
+            "description": "Exact text content to find and replace",
+            "examples": [
+              "const foo = 1;"
+            ]
+          },
+          "replacementContent": {
+            "type": "string",
+            "description": "Replacement text content",
+            "examples": [
+              "const foo = 2;"
+            ]
+          },
+          "allowMultiple": {
+            "type": "boolean",
+            "description": "Whether to allow replacing multiple occurrences. Defaults to false.",
+            "default": false
+          },
+          "startLine": {
+            "type": "number",
+            "description": "1-based starting line number to constrain the search range"
+          },
+          "endLine": {
+            "type": "number",
+            "description": "1-based ending line number to constrain the search range"
+          }
+        },
+        "required": [
+          "path",
+          "targetContent",
+          "replacementContent"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "path": "src/index.ts",
+            "targetContent": "const a = 1;",
+            "replacementContent": "const a = 2;",
+            "allowMultiple": false
+          }
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path relative to the workspace root"
+          },
+          "replacementsCount": {
+            "type": "number",
+            "description": "Number of occurrences replaced"
+          },
+          "bytesWritten": {
+            "type": "number",
+            "description": "Total byte size of the file after replacement"
+          }
+        },
+        "required": [
+          "path",
+          "replacementsCount",
+          "bytesWritten"
+        ]
+      }
+    },
+    "files.delete": {
+      "entry": "actions/files-delete.ts",
+      "description": "Delete a file or directory in the engineering workspace with boundary and sensitive path safeguards.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path to the file or directory relative to the workspace root",
+            "examples": [
+              "temp/scratch.txt",
+              "build"
+            ]
+          },
+          "recursive": {
+            "type": "boolean",
+            "description": "Whether to recursively delete directories. Defaults to false.",
+            "default": false
+          },
+          "ignoreIfNotExists": {
+            "type": "boolean",
+            "description": "Whether to silently ignore if the target path does not exist. Defaults to false.",
+            "default": false
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "path": "temp/scratch.txt",
+            "recursive": false,
+            "ignoreIfNotExists": true
+          }
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Normalized path relative to the workspace root"
+          },
+          "deleted": {
+            "type": "boolean",
+            "description": "Whether the target was deleted"
+          },
+          "isDirectory": {
+            "type": "boolean",
+            "description": "Whether the target was a directory"
+          }
+        },
+        "required": [
+          "path",
+          "deleted",
+          "isDirectory"
+        ]
+      }
+    },
+    "files.move": {
+      "entry": "actions/files-move.ts",
+      "description": "Move or rename a file or directory in the workspace with automatic parent directory creation and Git tracking awareness.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Source path relative to the workspace root",
+            "examples": [
+              "src/old-name.ts",
+              "docs/draft.md"
+            ]
+          },
+          "to": {
+            "type": "string",
+            "description": "Destination path relative to the workspace root",
+            "examples": [
+              "src/new-name.ts",
+              "docs/published/draft.md"
+            ]
+          },
+          "overwrite": {
+            "type": "boolean",
+            "description": "Whether to overwrite existing destination. Defaults to false.",
+            "default": false
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "from": "src/old-name.ts",
+            "to": "src/new-name.ts",
+            "overwrite": false
+          }
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Normalized source path relative to the workspace root"
+          },
+          "to": {
+            "type": "string",
+            "description": "Normalized destination path relative to the workspace root"
+          },
+          "gitTracked": {
+            "type": "boolean",
+            "description": "Whether the move was executed via git mv"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "gitTracked"
+        ]
+      }
+    },
+    "git.status": {
+      "entry": "actions/git-status.ts",
+      "description": "Inspect Git working tree and staging status in the workspace, with sensitive information filtering.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Repository or directory path relative to workspace root. Defaults to workspace root.",
+            "examples": [
+              "",
+              "packages/knowledge-workspace"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "examples": [
+          {
+            "path": ""
+          }
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "isGitRepo": {
+            "type": "boolean",
+            "description": "Whether the directory is part of a Git repository"
+          },
+          "branch": {
+            "type": "string",
+            "description": "Current Git branch name or empty string if not a repository"
+          },
+          "clean": {
+            "type": "boolean",
+            "description": "Whether the working tree is clean with no uncommitted changes"
+          },
+          "staged": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of staged modified file paths"
+          },
+          "unstaged": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of unstaged modified file paths"
+          },
+          "untracked": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of untracked file paths"
+          }
+        },
+        "required": [
+          "isGitRepo",
+          "branch",
+          "clean",
+          "staged",
+          "unstaged",
+          "untracked"
+        ]
+      }
+    },
+    "git.diff": {
+      "entry": "actions/git-diff.ts",
+      "description": "Inspect Git diff in the workspace with budget-bounded output and structured change statistics.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path to a file or directory to inspect diff for. Defaults to entire repository.",
+            "examples": [
+              "",
+              "src/index.ts"
+            ]
+          },
+          "staged": {
+            "type": "boolean",
+            "description": "Whether to inspect staged changes instead of unstaged changes. Defaults to false.",
+            "default": false
+          },
+          "statOnly": {
+            "type": "boolean",
+            "description": "Whether to only return diff summary statistics instead of full patch. Defaults to false.",
+            "default": false
+          },
+          "maxLines": {
+            "type": "number",
+            "description": "Maximum number of diff lines to return. Defaults to 1000.",
+            "default": 1000
+          },
+          "maxBytes": {
+            "type": "number",
+            "description": "Maximum byte budget for diff content. Defaults to 262144 (256KB).",
+            "default": 262144
+          }
+        },
+        "additionalProperties": false,
+        "examples": [
+          {
+            "path": "",
+            "staged": false,
+            "statOnly": false,
+            "maxLines": 1000,
+            "maxBytes": 262144
+          }
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "isGitRepo": {
+            "type": "boolean",
+            "description": "Whether the directory is part of a Git repository"
+          },
+          "clean": {
+            "type": "boolean",
+            "description": "Whether there are no differences in the inspected scope"
+          },
+          "diff": {
+            "type": "string",
+            "description": "Diff text content, bounded by maxLines and maxBytes"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Whether the diff text was truncated due to budget limits"
+          },
+          "filesChanged": {
+            "type": "number",
+            "description": "Number of files changed"
+          },
+          "insertions": {
+            "type": "number",
+            "description": "Total number of inserted lines"
+          },
+          "deletions": {
+            "type": "number",
+            "description": "Total number of deleted lines"
+          }
+        },
+        "required": [
+          "isGitRepo",
+          "clean",
+          "diff",
+          "truncated",
+          "filesChanged",
+          "insertions",
+          "deletions"
+        ]
+      }
+    },
+    "links.verify": {
+      "entry": "actions/links-verify.ts",
+      "description": "Verify local relative links and heading anchor references in markdown documentation.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path to a directory or markdown file to scan relative to workspace root. Defaults to '.'.",
+            "default": ".",
+            "examples": [
+              ".",
+              "docs",
+              "README.md"
+            ]
+          },
+          "checkAnchors": {
+            "type": "boolean",
+            "description": "Whether to verify document heading anchor targets. Defaults to true.",
+            "default": true
+          },
+          "ignoreDirs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Additional directory names to ignore during scanning.",
+            "examples": [
+              [
+                "archive",
+                "vendor"
+              ]
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "examples": [
+          {
+            "path": ".",
+            "checkAnchors": true,
+            "ignoreDirs": [
+              "archive"
+            ]
+          }
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "scannedFiles": {
+            "type": "integer",
+            "description": "Number of markdown files scanned"
+          },
+          "totalLinks": {
+            "type": "integer",
+            "description": "Total number of local relative links checked"
+          },
+          "brokenCount": {
+            "type": "integer",
+            "description": "Total number of broken links found"
+          },
+          "brokenLinks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "file": {
+                  "type": "string",
+                  "description": "Relative path to markdown file containing the broken link"
+                },
+                "line": {
+                  "type": "integer",
+                  "description": "1-based line number where the broken link appears"
+                },
+                "link": {
+                  "type": "string",
+                  "description": "Raw link text as written in document"
+                },
+                "target": {
+                  "type": "string",
+                  "description": "Resolved relative target path or anchor"
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "TARGET_NOT_FOUND",
+                    "ANCHOR_NOT_FOUND"
+                  ],
+                  "description": "Failure reason code (TARGET_NOT_FOUND or ANCHOR_NOT_FOUND)"
+                }
+              },
+              "required": [
+                "file",
+                "line",
+                "link",
+                "target",
+                "reason"
+              ]
+            },
+            "description": "List of broken links found during scan"
+          }
+        },
+        "required": [
+          "scannedFiles",
+          "totalLinks",
+          "brokenCount",
+          "brokenLinks"
+        ]
+      }
     }
   },
   "files": [
