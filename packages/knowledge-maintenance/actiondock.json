@@ -37,6 +37,14 @@
               "/srv/workspace/system-knowledge"
             ]
           },
+          "url": {
+            "type": "string",
+            "description": "远端 Git 仓库克隆地址（如 git@github.com:...、https://... 或本地裸仓路径）。当本地工作区不存在时，利用此地址执行自动部分克隆。",
+            "examples": [
+              "https://github.com/example/repo.git",
+              "git@github.com:example/repo.git"
+            ]
+          },
           "config": {
             "type": "string",
             "description": "Path to repository configuration JSON file (defaults to /etc/actiondock/repos.json if omitted)",
@@ -145,6 +153,10 @@
             "type": "boolean",
             "description": "Whether the knowledge branch was newly created and initialized on remote"
           },
+          "cloned": {
+            "type": "boolean",
+            "description": "Whether the repository was newly cloned during synchronization"
+          },
           "summary": {
             "type": "object",
             "required": [
@@ -234,6 +246,10 @@
                 "initializedBranch": {
                   "type": "boolean",
                   "description": "Whether branch was newly initialized"
+                },
+                "cloned": {
+                  "type": "boolean",
+                  "description": "Whether the repository was newly cloned during synchronization"
                 },
                 "message": {
                   "type": "string",

@@ -88,6 +88,12 @@ describe("repo-utils", () => {
       );
     });
 
+    it("returns resolved path on non-existent path when allowNonExistent is true", () => {
+      const nonExistentPath = "/non/existent/path/here/12345";
+      const resolved = resolveRepoPath(nonExistentPath, { allowNonExistent: true });
+      assert.equal(resolved, path.resolve(nonExistentPath));
+    });
+
     it("throws when path is a file instead of directory", () => {
       const tmpFile = path.join(os.tmpdir(), `temp-file-${Date.now()}.txt`);
       fs.writeFileSync(tmpFile, "content");

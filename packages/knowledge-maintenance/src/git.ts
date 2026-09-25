@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { ActionContext } from "@actiondock/sdk";
 import { decodeText } from "@actiondock/sdk";
 import { MaintenanceError } from "./errors.ts";
@@ -8,6 +10,13 @@ export interface GitRunnerOptions {
   timeoutMs?: number;
   maxOutputBytes?: number;
   env?: Record<string, string>;
+}
+
+export interface GitCloneOptions {
+  filterBlobNone?: boolean | undefined;
+  branch?: string | undefined;
+  timeoutMs?: number | undefined;
+  maxOutputBytes?: number | undefined;
 }
 
 export interface GitExecResult {
@@ -197,5 +206,132 @@ export class GitClient {
       standardArgs.push(options.branch);
     }
     return this.run(standardArgs);
+  }
+
+  static async clone(
+    ctx: ActionContext,
+    url: string,
+    targetPath: string,
+    options?: GitCloneOptions
+  ): Promise<GitExecResult> {
+    const timeoutMs = options?.timeoutMs ?? DEFAULT_GIT_TIMEOUT_MS;
+    const maxOutputBytes = options?.maxOutputBytes ?? DEFAULT_GIT_MAX_OUTPUT_BYTES;
+
+    if (ctx.signal.aborted) {
+      throw new MaintenanceError("Git operation aborted by caller", "OPERATION_ABORTED", 499);
+    }
+
+    const runClone = async (args: string[]): Promise<GitExecResult> => {
+      if (ctx.signal.aborted) {
+        throw new MaintenanceError("Git operation aborted by caller", "OPERATION_ABORTED", 499);
+      }
+
+      ctx.log.debug(`Executing: git ${args.join(" ")}`);
+
+      const parentDir = path.dirname(targetPath);
+      try {
+        if (!fs.existsSync(parentDir)) {
+          fs.mkdirSync(parentDir, { recursive: true });
+        }
+      } catch {
+        // Ignore parent directory creation error and let git handle it
+      }
+
+      const cwd = fs.existsSync(parentDir) ? parentDir : process.cwd();
+
+      const res = await ctx.process.run(
+        {
+          spec: {
+            executable: "git",
+            args,
+            cwd,
+            env: {
+              inherit: "allowlisted",
+              set: {
+                GIT_TERMINAL_PROMPT: "0",
+                GIT_MERGE_AUTOEDIT: "no",
+              },
+            },
+            io: { mode: "pipe" },
+          },
+          timeoutMs,
+          maxOutputBytes,
+        },
+        { signal: ctx.signal }
+      );
+
+      const stdoutChunks = res.chunks.filter((c) => c.stream === "stdout");
+      const stderrChunks = res.chunks.filter((c) => c.stream === "stderr");
+      const stdout = decodeText(stdoutChunks);
+      const stderr = decodeText(stderrChunks);
+      const raw = decodeText(res.chunks);
+
+      return {
+        code: res.exit.code,
+        signal: res.exit.signal,
+        stdout,
+        stderr,
+        raw,
+      };
+    };
+
+    const useBlobless = options?.filterBlobNone ?? true;
+    if (useBlobless) {
+      const bloblessArgs = ["clone", "--filter=blob:none"];
+      if (options?.branch) {
+        bloblessArgs.push("-b", options.branch);
+      }
+      bloblessArgs.push(url, targetPath);
+
+      const bloblessRes = await runClone(bloblessArgs);
+      if (bloblessRes.code === 0) {
+        return bloblessRes;
+      }
+
+      const combined = (bloblessRes.stderr + " " + bloblessRes.stdout).toLowerCase();
+      if (
+        combined.includes("filter") ||
+        combined.includes("unknown option") ||
+        combined.includes("not supported") ||
+        combined.includes("unsupported")
+      ) {
+        ctx.log.warn("Remote origin does not support --filter=blob:none; falling back to standard clone", {
+          error: bloblessRes.stderr.trim(),
+        });
+        if (fs.existsSync(targetPath)) {
+          try {
+            fs.rmSync(targetPath, { recursive: true, force: true });
+          } catch {
+            // Ignore error
+          }
+        }
+        const fallbackArgs = ["clone"];
+        if (options?.branch) {
+          fallbackArgs.push("-b", options.branch);
+        }
+        fallbackArgs.push(url, targetPath);
+        return runClone(fallbackArgs);
+      }
+      return bloblessRes;
+    }
+
+    const standardArgs = ["clone"];
+    if (options?.branch) {
+      standardArgs.push("-b", options.branch);
+    }
+    standardArgs.push(url, targetPath);
+    return runClone(standardArgs);
+  }
+
+  async clone(
+    url: string,
+    targetPath?: string,
+    options?: GitCloneOptions
+  ): Promise<GitExecResult> {
+    return GitClient.clone(this.ctx, url, targetPath ?? this.defaultCwd, {
+      timeoutMs: this.defaultTimeoutMs,
+      maxOutputBytes: this.defaultMaxOutputBytes,
+      ...options,
+    });
   }
 }

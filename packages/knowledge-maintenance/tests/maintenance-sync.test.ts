@@ -774,5 +774,268 @@ describe("maintenance.sync", () => {
       fs.rmSync(tmpBase, { recursive: true, force: true });
     }
   });
+
+  it("automatically blobless-clones when target directory does not exist and url is provided", async () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "sync-clone-"));
+    const targetDir = path.join(tmpBase, "cloned-repo");
+    const remoteUrl = "https://github.com/example/order-service.git";
+
+    try {
+      const fakeDriver = new FakeProcessDriver();
+      const executedCommands: string[] = [];
+
+      fakeDriver.onSpawn = (handle: any, spec: any) => {
+        const cmd = spec.args.join(" ");
+        executedCommands.push(cmd);
+
+        if (cmd.startsWith("clone --filter=blob:none")) {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "rev-parse --is-inside-work-tree") {
+          handle.emitOutput("stdout", "true\n");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "status --porcelain") {
+          handle.emitOutput("stdout", "");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "rev-parse --verify refs/heads/release") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "checkout release") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "fetch --filter=blob:none origin" || cmd === "fetch origin") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "rev-parse --verify origin/docs") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "rev-parse --verify refs/heads/docs") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "checkout docs") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "merge --ff-only origin/docs") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "merge --no-edit origin/release") {
+          handle.emitOutput("stdout", "Merge made by the 'ort' strategy.\n");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "push origin docs") {
+          handle.emitOutput("stdout", "To origin\n   abc..def  docs -> docs\n");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "rev-parse HEAD") {
+          handle.emitOutput("stdout", "9999888877776666555544443333222211110000\n");
+          handle.emitExit({ code: 0, signal: null });
+        } else {
+          handle.emitExit({ code: 0, signal: null });
+        }
+        handle.emitOutputClosed("natural");
+      };
+
+      const runtime = createTestRuntime({
+        platform: createTestPlatform({ processDriver: fakeDriver }),
+      });
+
+      const res = await runtime.run(syncAction, {
+        path: targetDir,
+        url: remoteUrl,
+        repoType: "code",
+        sourceBranch: "release",
+        knowledgeBranch: "docs",
+      });
+
+      assert.equal(res.status, "success");
+      assert.equal(res.cloned, true);
+      assert.equal(res.repoType, "code");
+      assert.equal(res.sourceBranch, "release");
+      assert.equal(res.knowledgeBranch, "docs");
+      assert.equal(res.currentCommit, "9999888877776666555544443333222211110000");
+      assert.equal(res.initializedBranch, false);
+
+      assert.ok(
+        executedCommands.some(
+          (c) => c.startsWith("clone --filter=blob:none") && c.includes(remoteUrl) && c.includes(targetDir)
+        ),
+        "Must trigger blobless clone with url and target path"
+      );
+      assert.ok(executedCommands.includes("push origin docs"));
+    } finally {
+      fs.rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  it("automatically falls back to standard clone when blobless filter is unsupported by server", async () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "sync-clone-fallback-"));
+    const targetDir = path.join(tmpBase, "cloned-repo-fallback");
+    const remoteUrl = "https://github.com/example/legacy-repo.git";
+
+    try {
+      const fakeDriver = new FakeProcessDriver();
+      const executedCommands: string[] = [];
+
+      fakeDriver.onSpawn = (handle: any, spec: any) => {
+        const cmd = spec.args.join(" ");
+        executedCommands.push(cmd);
+
+        if (cmd.startsWith("clone --filter=blob:none")) {
+          handle.emitOutput("stderr", "fatal: server does not support partial clone filter\n");
+          handle.emitExit({ code: 128, signal: null });
+        } else if (cmd.startsWith("clone") && !cmd.includes("--filter=blob:none")) {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "rev-parse --is-inside-work-tree") {
+          handle.emitOutput("stdout", "true\n");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "status --porcelain") {
+          handle.emitOutput("stdout", "");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "rev-parse --verify refs/heads/release") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "checkout release") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "fetch --filter=blob:none origin" || cmd === "fetch origin") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "rev-parse --verify origin/docs") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "rev-parse --verify refs/heads/docs") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "checkout docs") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "merge --ff-only origin/docs") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "merge --no-edit origin/release") {
+          handle.emitOutput("stdout", "Merge made by the 'ort' strategy.\n");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "push origin docs") {
+          handle.emitOutput("stdout", "To origin\n   abc..def  docs -> docs\n");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "rev-parse HEAD") {
+          handle.emitOutput("stdout", "bbbb222233334444555566667777888899990000\n");
+          handle.emitExit({ code: 0, signal: null });
+        } else {
+          handle.emitExit({ code: 0, signal: null });
+        }
+        handle.emitOutputClosed("natural");
+      };
+
+      const runtime = createTestRuntime({
+        platform: createTestPlatform({ processDriver: fakeDriver }),
+      });
+
+      const res = await runtime.run(syncAction, {
+        path: targetDir,
+        url: remoteUrl,
+        repoType: "code",
+        sourceBranch: "release",
+        knowledgeBranch: "docs",
+      });
+
+      assert.equal(res.status, "success");
+      assert.equal(res.cloned, true);
+      assert.equal(res.currentCommit, "bbbb222233334444555566667777888899990000");
+
+      assert.ok(
+        executedCommands.some((c) => c.startsWith("clone --filter=blob:none")),
+        "Must attempt blobless clone first"
+      );
+      assert.ok(
+        executedCommands.some((c) => c.startsWith("clone") && !c.includes("--filter=blob:none")),
+        "Must fallback to standard clone without filter"
+      );
+      assert.ok(executedCommands.includes("push origin docs"));
+    } finally {
+      fs.rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  it("returns error status when target directory does not exist and no url is provided", async () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "sync-no-url-"));
+    const nonExistentPath = path.join(tmpBase, "does-not-exist");
+
+    try {
+      const fakeDriver = new FakeProcessDriver();
+      const executedCommands: string[] = [];
+
+      fakeDriver.onSpawn = (handle: any, spec: any) => {
+        executedCommands.push(spec.args.join(" "));
+        handle.emitExit({ code: 0, signal: null });
+        handle.emitOutputClosed("natural");
+      };
+
+      const runtime = createTestRuntime({
+        platform: createTestPlatform({ processDriver: fakeDriver }),
+      });
+
+      const res = await runtime.run(syncAction, {
+        path: nonExistentPath,
+      });
+
+      assert.equal(res.status, "error");
+      assert.equal(res.cloned, false);
+      assert.ok(res.message.includes("Target path does not exist and no remote url provided for clone"));
+      assert.equal(executedCommands.length, 0, "No git commands should be run when path does not exist and no url is provided");
+    } finally {
+      fs.rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  it("batch synchronizes with automatic clone when repository path does not exist and url is provided in configuration", async () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "sync-batch-clone-"));
+    const repoCloned = path.join(tmpBase, "cloned-service");
+    const configFile = path.join(tmpBase, "repos.json");
+
+    fs.writeFileSync(
+      configFile,
+      JSON.stringify([
+        {
+          path: repoCloned,
+          url: "https://github.com/example/cloned-service.git",
+          repoType: "system_knowledge",
+          sourceBranch: "master",
+        },
+      ])
+    );
+
+    try {
+      const fakeDriver = new FakeProcessDriver();
+      const executedCommands: string[] = [];
+
+      fakeDriver.onSpawn = (handle: any, spec: any) => {
+        const cmd = spec.args.join(" ");
+        executedCommands.push(cmd);
+
+        if (cmd.startsWith("clone --filter=blob:none")) {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "rev-parse --is-inside-work-tree") {
+          handle.emitOutput("stdout", "true\n");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "status --porcelain") {
+          handle.emitOutput("stdout", "");
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "fetch --filter=blob:none origin" || cmd === "fetch origin") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "rev-parse --verify refs/heads/master") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "checkout master" || cmd === "merge --ff-only origin/master") {
+          handle.emitExit({ code: 0, signal: null });
+        } else if (cmd === "rev-parse HEAD") {
+          handle.emitOutput("stdout", "eeee111122223333444455556666777788889999\n");
+          handle.emitExit({ code: 0, signal: null });
+        } else {
+          handle.emitExit({ code: 0, signal: null });
+        }
+        handle.emitOutputClosed("natural");
+      };
+
+      const runtime = createTestRuntime({
+        platform: createTestPlatform({ processDriver: fakeDriver }),
+      });
+
+      const res = await runtime.run(syncAction, {
+        config: configFile,
+      });
+
+      assert.equal(res.batch, true);
+      assert.equal(res.status, "success");
+      assert.equal(res.summary?.total, 1);
+      assert.equal(res.summary?.syncedCount, 1);
+      assert.equal(res.results?.[0]?.cloned, true);
+      assert.ok(executedCommands.some((c) => c.startsWith("clone --filter=blob:none")));
+    } finally {
+      fs.rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
 });
 

@@ -10,6 +10,7 @@ export type Output = ActionOutput<"maintenance.sync">;
 
 interface RepoSyncConfig {
   path: string;
+  url?: string;
   repoType?: "code" | "system_knowledge";
   sourceBranch?: string;
   knowledgeBranch?: string;
@@ -19,6 +20,7 @@ interface RepoSyncConfig {
 type SingleRepoResult = {
   status: "success" | "dirty_worktree" | "conflict" | "error";
   path: string;
+  cloned?: boolean;
   repoType?: "code" | "system_knowledge";
   sourceBranch?: string;
   knowledgeBranch?: string;
@@ -40,12 +42,13 @@ async function syncSingleRepo(
 
   let resolvedPath: string;
   try {
-    resolvedPath = resolveRepoPath(repoInput.path);
+    resolvedPath = resolveRepoPath(repoInput.path, { allowNonExistent: true });
   } catch (err: any) {
     ctx.log.error("Failed to resolve repository path", { error: err.message });
     return {
       status: "error",
       path: repoInput.path,
+      cloned: false,
       ...(repoInput.repoType ? { repoType: repoInput.repoType } : { repoType: "code" as const }),
       message: err.message,
     };
@@ -53,6 +56,53 @@ async function syncSingleRepo(
 
   const timeoutMs = ctx.config.get<number>("GIT_TIMEOUT_MS", 30000);
   const maxOutputBytes = ctx.config.get<number>("GIT_MAX_OUTPUT_BYTES", 4 * 1024 * 1024);
+  const defaultBlobless = ctx.config.get<boolean>("GIT_BLOBLESS_FETCH", true);
+  const useBlobless = repoInput.filterBlobNone ?? defaultBlobless;
+
+  let cloned = false;
+  const pathExists = fs.existsSync(resolvedPath);
+  const hasGitDir = pathExists && fs.existsSync(path.join(resolvedPath, ".git"));
+
+  if (!pathExists || (!hasGitDir && repoInput.url)) {
+    if (!repoInput.url) {
+      ctx.log.error("Target path does not exist and no remote url provided for clone", { path: resolvedPath });
+      return {
+        status: "error",
+        path: resolvedPath,
+        cloned: false,
+        ...(repoInput.repoType ? { repoType: repoInput.repoType } : { repoType: "code" as const }),
+        message: `Target path does not exist and no remote url provided for clone: ${resolvedPath}`,
+      };
+    }
+
+    ctx.log.info("Target repository does not exist locally; initiating clone", {
+      path: resolvedPath,
+      url: repoInput.url,
+      useBlobless,
+    });
+
+    const cloneRes = await GitClient.clone(ctx, repoInput.url, resolvedPath, {
+      filterBlobNone: useBlobless,
+      branch: repoInput.sourceBranch,
+      timeoutMs,
+      maxOutputBytes,
+    });
+
+    if (cloneRes.code !== 0) {
+      const errorMsg = cloneRes.stderr.trim() || cloneRes.stdout.trim() || "git clone failed";
+      ctx.log.error("git clone failed", { error: errorMsg });
+      return {
+        status: "error",
+        path: resolvedPath,
+        cloned: false,
+        ...(repoInput.repoType ? { repoType: repoInput.repoType } : { repoType: "code" as const }),
+        message: `Failed to clone repository from ${repoInput.url}: ${errorMsg}`,
+      };
+    }
+
+    cloned = true;
+  }
+
   const git = new GitClient(ctx, resolvedPath, timeoutMs, maxOutputBytes);
 
   // 1. Validate git repository
@@ -62,6 +112,7 @@ async function syncSingleRepo(
     return {
       status: "error",
       path: resolvedPath,
+      cloned,
       ...(repoInput.repoType ? { repoType: repoInput.repoType } : { repoType: "code" as const }),
       message: `Path is not a valid git repository: ${resolvedPath}`,
     };
@@ -77,6 +128,7 @@ async function syncSingleRepo(
     return {
       status: "dirty_worktree",
       path: resolvedPath,
+      cloned,
       ...(repoInput.repoType ? { repoType: repoInput.repoType } : { repoType: "code" as const }),
       uncommittedFiles: dirtyFiles,
       message: "Working tree is dirty; synchronization aborted to prevent uncommitted changes from being lost",
@@ -95,9 +147,20 @@ async function syncSingleRepo(
     ...(knowledgeBranch ? { knowledgeBranch } : {}),
   });
 
+  // Ensure production source branch is checked out if newly cloned
+  if (cloned) {
+    const localSourceExists = await git.refExists(`refs/heads/${sourceBranch}`);
+    if (localSourceExists) {
+      await git.run(["checkout", sourceBranch]);
+    } else {
+      const originSourceExists = await git.refExists(`origin/${sourceBranch}`);
+      if (originSourceExists) {
+        await git.run(["checkout", "-B", sourceBranch, `origin/${sourceBranch}`]);
+      }
+    }
+  }
+
   // 4. Fetch origin (Blobless Partial Fetch with automatic fallback)
-  const defaultBlobless = ctx.config.get<boolean>("GIT_BLOBLESS_FETCH", true);
-  const useBlobless = repoInput.filterBlobNone ?? defaultBlobless;
   ctx.log.info(`Fetching from remote origin (blobless: ${useBlobless})...`);
   const fetchResult = await git.fetchOrigin({ filterBlobNone: useBlobless });
   if (fetchResult.code !== 0) {
@@ -106,6 +169,7 @@ async function syncSingleRepo(
     return {
       status: "error",
       path: resolvedPath,
+      cloned,
       repoType,
       sourceBranch,
       ...(knowledgeBranch ? { knowledgeBranch } : {}),
@@ -123,6 +187,7 @@ async function syncSingleRepo(
         return {
           status: "error",
           path: resolvedPath,
+          cloned,
           repoType,
           sourceBranch,
           message: `Failed to checkout ${sourceBranch}: ${checkoutRes.stderr.trim()}`,
@@ -134,6 +199,7 @@ async function syncSingleRepo(
         return {
           status: "error",
           path: resolvedPath,
+          cloned,
           repoType,
           sourceBranch,
           message: `Failed to checkout ${sourceBranch} from origin/${sourceBranch}: ${checkoutRes.stderr.trim()}`,
@@ -149,6 +215,7 @@ async function syncSingleRepo(
       return {
         status: "error",
         path: resolvedPath,
+        cloned,
         repoType,
         sourceBranch,
         message: `Fast-forward merge failed for origin/${sourceBranch}: ${err}`,
@@ -161,6 +228,7 @@ async function syncSingleRepo(
     return {
       status: "success",
       path: resolvedPath,
+      cloned,
       repoType,
       sourceBranch,
       currentCommit,
@@ -183,6 +251,7 @@ async function syncSingleRepo(
         return {
           status: "error",
           path: resolvedPath,
+          cloned,
           repoType,
           sourceBranch,
           knowledgeBranch: docsBranch,
@@ -197,6 +266,7 @@ async function syncSingleRepo(
       return {
         status: "error",
         path: resolvedPath,
+        cloned,
         repoType,
         sourceBranch,
         knowledgeBranch: docsBranch,
@@ -208,6 +278,7 @@ async function syncSingleRepo(
     return {
       status: "success",
       path: resolvedPath,
+      cloned,
       repoType,
       sourceBranch,
       knowledgeBranch: docsBranch,
@@ -226,6 +297,7 @@ async function syncSingleRepo(
       return {
         status: "error",
         path: resolvedPath,
+        cloned,
         repoType,
         sourceBranch,
         knowledgeBranch: docsBranch,
@@ -240,6 +312,7 @@ async function syncSingleRepo(
       return {
         status: "error",
         path: resolvedPath,
+        cloned,
         repoType,
         sourceBranch,
         knowledgeBranch: docsBranch,
@@ -270,6 +343,7 @@ async function syncSingleRepo(
     return {
       status: "conflict",
       path: resolvedPath,
+      cloned,
       repoType,
       sourceBranch,
       knowledgeBranch: docsBranch,
@@ -285,6 +359,7 @@ async function syncSingleRepo(
     return {
       status: "error",
       path: resolvedPath,
+      cloned,
       repoType,
       sourceBranch,
       knowledgeBranch: docsBranch,
@@ -298,6 +373,7 @@ async function syncSingleRepo(
   return {
     status: "success",
     path: resolvedPath,
+    cloned,
     repoType,
     sourceBranch,
     knowledgeBranch: docsBranch,
@@ -313,6 +389,7 @@ export default defineAction<Input, Output>(async (input, ctx) => {
     return syncSingleRepo(
       {
         path: input.path,
+        ...(input.url !== undefined ? { url: input.url } : {}),
         ...(input.repoType !== undefined ? { repoType: input.repoType } : {}),
         ...(input.sourceBranch !== undefined ? { sourceBranch: input.sourceBranch } : {}),
         ...(input.knowledgeBranch !== undefined ? { knowledgeBranch: input.knowledgeBranch } : {}),
@@ -356,6 +433,7 @@ export default defineAction<Input, Output>(async (input, ctx) => {
         } else if (item && typeof item.path === "string" && item.path.trim()) {
           reposToSync.push({
             path: item.path.trim(),
+            ...(item.url && typeof item.url === "string" ? { url: item.url.trim() } : {}),
             ...(item.repoType ? { repoType: item.repoType } : {}),
             ...(item.sourceBranch ? { sourceBranch: item.sourceBranch } : {}),
             ...(item.knowledgeBranch ? { knowledgeBranch: item.knowledgeBranch } : {}),
@@ -422,6 +500,11 @@ export default defineAction<Input, Output>(async (input, ctx) => {
       const singleResult = await syncSingleRepo(
         {
           path: repoConfig.path,
+          ...(repoConfig.url !== undefined
+            ? { url: repoConfig.url }
+            : input.url !== undefined
+            ? { url: input.url }
+            : {}),
           ...(repoConfig.repoType !== undefined
             ? { repoType: repoConfig.repoType }
             : input.repoType !== undefined

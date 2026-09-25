@@ -22,15 +22,25 @@ export interface ParsedCommit {
   date?: string;
 }
 
+export interface ResolveRepoPathOptions {
+  allowNonExistent?: boolean | undefined;
+}
+
 /**
  * Validates and resolves local repository directory path.
  */
-export function resolveRepoPath(rawPath: string): string {
+export function resolveRepoPath(
+  rawPath: string,
+  options?: ResolveRepoPathOptions
+): string {
   if (!rawPath || typeof rawPath !== "string") {
     throw new MaintenanceError("Path parameter is required", "INVALID_PATH", 400);
   }
   const resolved = path.resolve(rawPath);
   if (!fs.existsSync(resolved)) {
+    if (options?.allowNonExistent) {
+      return resolved;
+    }
     throw new MaintenanceError(`Path does not exist: ${rawPath}`, "PATH_NOT_FOUND", 404);
   }
   const stat = fs.statSync(resolved);
