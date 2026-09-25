@@ -6,7 +6,7 @@ import { spawn, execSync } from "node:child_process";
 
 // 1. 读取环境配置
 const PORT = parseInt(process.env.PORT || "443", 10);
-const QUERY_TOKEN = process.env.ACTIONDOCK_TOKEN || "";
+const SK_TOKEN = process.env.ACTIONDOCK_TOKEN || "";
 const AGENT_TOKEN = process.env.ACTIONDOCK_AGENT_TOKEN || "";
 const INTERNAL_PORT = 5177;
 const INTERNAL_HOST = "127.0.0.1";
@@ -14,7 +14,7 @@ const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || "/srv/workspace";
 const KNOWLEDGE_INBOX_ROOT = process.env.KNOWLEDGE_INBOX_ROOT || "/srv/knowledge-inbox";
 
 // 白名单动作定义
-const QUERY_ALLOWLIST = new Set([
+const SK_ALLOWLIST = new Set([
   "search.rg",
   "files.read",
   "files.list",
@@ -153,8 +153,8 @@ function verifyToken(req) {
     } catch {}
   }
   if (!token) return null;
-  if (QUERY_TOKEN && token === QUERY_TOKEN) {
-    return "query";
+  if (SK_TOKEN && token === SK_TOKEN) {
+    return "sk";
   }
   if (AGENT_TOKEN && token === AGENT_TOKEN) {
     return "skm";
@@ -231,9 +231,9 @@ const server = https.createServer({ key, cert }, async (req, res) => {
   }
 
   // ---------------------------------------------------------------------------
-  // query 视图：白名单严格收敛
+  // sk 视图：白名单严格收敛
   // ---------------------------------------------------------------------------
-  if (view === "query") {
+  if (view === "sk") {
     // 1. 动作列表请求
     if ((pathname === "/api/v2/actions" || pathname === "/actions") && req.method === "GET") {
       try {
@@ -243,9 +243,9 @@ const server = https.createServer({ key, cert }, async (req, res) => {
         const filtered = Array.isArray(actions)
           ? actions.filter(
               (a) =>
-                QUERY_ALLOWLIST.has(a.id) ||
-                (a.actionId && QUERY_ALLOWLIST.has(a.actionId)) ||
-                (a.packageId && QUERY_ALLOWLIST.has(`${a.packageId}/${a.id}`))
+                SK_ALLOWLIST.has(a.id) ||
+                (a.actionId && SK_ALLOWLIST.has(a.actionId)) ||
+                (a.packageId && SK_ALLOWLIST.has(`${a.packageId}/${a.id}`))
             )
           : [];
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -262,8 +262,8 @@ const server = https.createServer({ key, cert }, async (req, res) => {
     const actionTarget = parseActionTarget(pathname);
     if (actionTarget) {
       const allowed =
-        QUERY_ALLOWLIST.has(actionTarget.actionId) ||
-        (actionTarget.fullAction && QUERY_ALLOWLIST.has(actionTarget.fullAction));
+        SK_ALLOWLIST.has(actionTarget.actionId) ||
+        (actionTarget.fullAction && SK_ALLOWLIST.has(actionTarget.fullAction));
 
       if (!allowed) {
         res.writeHead(403, { "Content-Type": "application/json" });
@@ -272,7 +272,7 @@ const server = https.createServer({ key, cert }, async (req, res) => {
             ok: false,
             error: {
               code: "ACTION_FORBIDDEN",
-              message: `Action '${actionTarget.fullAction || actionTarget.actionId}' is not allowed in query view`,
+              message: `Action '${actionTarget.fullAction || actionTarget.actionId}' is not allowed in sk view`,
             },
           })
         );
@@ -283,7 +283,7 @@ const server = https.createServer({ key, cert }, async (req, res) => {
       return;
     }
 
-    // 3. query 视图禁止写操作或非白名单路径
+    // 3. sk 视图禁止写操作或非白名单路径
     if (req.method !== "GET" && !pathname.includes("/runs")) {
       res.writeHead(403, { "Content-Type": "application/json" });
       res.end(
@@ -291,7 +291,7 @@ const server = https.createServer({ key, cert }, async (req, res) => {
           ok: false,
           error: {
             code: "FORBIDDEN",
-            message: "Write operations are forbidden in query view",
+            message: "Write operations are forbidden in sk view",
           },
         })
       );
@@ -357,7 +357,7 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log("============================================================");
   console.log("Starting ActionDock Knowledge Server (Single-Port Virtual Views Mode)");
   console.log(`Port:           ${PORT} (HTTPS, Virtual Views)`);
-  console.log("query view:     Enabled (Action allowlist: search.rg, files.read, files.list, knowledge.collect)");
+  console.log("sk view:        Enabled (Action allowlist: search.rg, files.read, files.list, knowledge.collect)");
   console.log("skm view:       Enabled (Package allowlist: workspace, knowledge, maintenance)");
   console.log(`Workspace Root: ${WORKSPACE_ROOT}`);
   console.log(`Inbox Root:     ${KNOWLEDGE_INBOX_ROOT}`);

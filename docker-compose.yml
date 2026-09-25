@@ -10,7 +10,7 @@ services:
       - "${PORT:-443}:443"
     environment:
       - PORT=443
-      - ACTIONDOCK_TOKEN=${ACTIONDOCK_TOKEN:-actiondock-query-token}
+      - ACTIONDOCK_TOKEN=${ACTIONDOCK_TOKEN:-actiondock-sk-token}
       - ACTIONDOCK_AGENT_TOKEN=${ACTIONDOCK_AGENT_TOKEN:-actiondock-agent-token}
       - WORKSPACE_ROOT=/srv/workspace
       - KNOWLEDGE_INBOX_ROOT=/srv/knowledge-inbox

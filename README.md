@@ -2,7 +2,7 @@
 
 [ActionDock](https://github.com/team4u/actiondock) 云主机一体化知识服务容器。
 
-本工程负责在云主机上以 Docker 容器化运行知识中枢，采用 ActionDock 原生单端口多视图（Virtual Views）架构：统一在单一原生 HTTPS（端口 443）上运行，通过请求中的 Bearer Token 自动匹配与隔离面向外部查询用户的只读白名单视图（query）与面向内部维护智能体的全量特权视图（skm），实现细粒度安全隔离与自动化闭环演进。
+本工程负责在云主机上以 Docker 容器化运行知识中枢，采用 ActionDock 原生单端口多视图（Virtual Views）架构：统一在单一原生 HTTPS（端口 443）上运行，通过请求中的 Bearer Token 自动匹配与隔离面向外部查询用户的只读白名单视图（sk）与面向内部维护智能体的全量特权视图（skm），实现细粒度安全隔离与自动化闭环演进。
 
 > **深入理解架构**：系统核心设计哲学、单端口多视图架构与闭环演进，请参阅 [知识中枢设计理念与核心架构演进](docs/design.md)。
 
@@ -24,7 +24,7 @@
   │                                 │                              │                         │
   │                                 ▼                              ▼                         │
   │                 ┌──────────────────────────────┐ ┌──────────────────────────────┐        │
-  │                 │ query 虚拟视图 (白名单只读)   │ │ skm 虚拟视图 (特权受控维护)  │        │
+  │                 │ sk 虚拟视图 (白名单只读)      │ │ skm 虚拟视图 (特权受控维护)  │        │
   │                 │ -A search.rg, files.read,    │ │ -P workspace,                │        │
   │                 │    files.list,               │ │    knowledge,                │        │
   │                 │    knowledge.collect         │ │    maintenance               │        │
@@ -94,8 +94,8 @@ cp .env.example .env
 ```
 根据云主机实际情况编辑 `.env`：
 ```dotenv
-# 查询服务鉴权令牌 (面向外部查询用户与排障智能体，由 443 端口虚拟视图自动路由至 query 只读白名单视图)
-ACTIONDOCK_TOKEN=your-random-secure-query-token-here
+# 查询服务鉴权令牌 (面向外部查询用户与排障智能体，由 443 端口虚拟视图自动路由至 sk 只读白名单视图)
+ACTIONDOCK_TOKEN=your-random-secure-sk-token-here
 
 # 智能体受控维护服务鉴权令牌 (面向内部维护智能体，由 443 端口虚拟视图自动路由至 skm 全量特权视图)
 ACTIONDOCK_AGENT_TOKEN=your-random-secure-agent-token-here
@@ -145,7 +145,7 @@ docker compose logs -f
 
 容器启动后，将自动以单端口多视图模式运行：
 - **服务监听**：在 `443` 端口上监听原生 HTTPS 请求。
-- **权限隔离**：客户端请求携带 `ACTIONDOCK_TOKEN` 时自动路由至 `query` 视图（动作白名单严格收敛）；携带 `ACTIONDOCK_AGENT_TOKEN` 时自动路由至 `skm` 特权视图（完整维护权限）。
+- **权限隔离**：客户端请求携带 `ACTIONDOCK_TOKEN` 时自动路由至 `sk` 视图（动作白名单严格收敛）；携带 `ACTIONDOCK_AGENT_TOKEN` 时自动路由至 `skm` 特权视图（完整维护权限）。
 > **证书说明**：若未挂载正式证书，ActionDock 会自动生成合法的自签名 TLS 证书运行。
 
 ---
