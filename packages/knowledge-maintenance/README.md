@@ -1,6 +1,6 @@
 # actiondock-knowledge-maintenance
 
-ActionDock 2.x 高权限维护平面（Privileged Maintenance Plane），专用于知识库自动维护与反馈闭环架构。
+[ActionDock](https://github.com/team4u/actiondock) 高权限维护平面（Privileged Maintenance Plane），专用于知识库自动维护与反馈闭环架构。
 
 本包运行在云主机后台，由 Cron / systemd 定时调用 Shell 脚本驱动，负责代码仓与系统知识仓的 Git 同步、变更扫描及审查 Checkpoint 推进。
 
@@ -127,7 +127,7 @@ ActionDock 2.x 高权限维护平面（Privileged Maintenance Plane），专用�
 
 ## 开发与质量规范
 
-本包严格遵循 ActionDock 2.x 规范红线：
+本包严格遵循 ActionDock 规范红线：
 1. **进程隔离**：严禁使用 Node 原生 `child_process`，所有 Git 交互均通过 `ctx.process.run` 驱动，并绑定超时时限、缓冲区大小及 `ctx.signal`。
 2. **结构化日志**：严禁使用 `console.log`，全量调用 `ctx.log.info / warn / error / debug`。
 3. **强类型与契约**：基于 Schema v2 规范编写 `actiondock.json`，通过 `ad generate types` 导出类型。

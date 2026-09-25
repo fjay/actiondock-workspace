@@ -4,7 +4,7 @@
 FROM node:25-bookworm-slim
 
 LABEL maintainer="ActionDock Knowledge Team"
-LABEL description="ActionDock 2.x Knowledge Server (Read, Append, Privileged Maintenance Planes)"
+LABEL description="ActionDock Knowledge Server (Read, Append, Privileged Maintenance Planes)"
 
 # 安装必要的系统底层工具：git (带 partial clone 支持), ripgrep (search.rg 引擎), ssh, ca-certificates
 RUN apt-get update && apt-get install -y --no-install-recommends \

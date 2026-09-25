@@ -1,6 +1,6 @@
 # ActionDock Workspace
 
-面向智能体的只读安全工程工作区能力包，基于 [ActionDock 2.0](https://github.com/team4u/actiondock) 规范构建，提供高吞吐结构化 ripgrep 检索、受控分段文本读取与受限目录浏览能力。
+面向智能体的只读安全工程工作区能力包，基于 [ActionDock](https://github.com/team4u/actiondock) 规范构建，提供高吞吐结构化 ripgrep 检索、受控分段文本读取与受限目录浏览能力。
 
 ## 核心定位与设计原则
 
@@ -104,7 +104,7 @@ npm run typecheck
 
 #### 1. 扁平参数调用（推荐主流方式，杜绝终端引号与转义问题）
 
-根据 ActionDock 2.x 规范，面向智能体与命令行的主流调用语法为扁平参数赋值（`ad run <action> [control-options] [-- <assignments...>]`）：
+根据 ActionDock 规范，面向智能体与命令行的主流调用语法为扁平参数赋值（`ad run <action> [control-options] [-- <assignments...>]`）：
 - 控制选项与数据参数通过 `--` 协议边界隔离；
 - `path=value` 严格保留为字符串；
 - `path:=json` 严格解析为 JSON（数字、布尔、数组或对象）；

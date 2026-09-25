@@ -1,7 +1,7 @@
 {
   "name": "knowledge-server",
   "version": "1.0.0",
-  "description": "ActionDock 2.x Cloud Knowledge Server - All-in-One Container Distribution",
+  "description": "ActionDock Cloud Knowledge Server - All-in-One Container Distribution",
   "type": "module",
   "workspaces": [
     "packages/*"

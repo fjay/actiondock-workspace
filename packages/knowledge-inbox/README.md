@@ -1,6 +1,6 @@
 # actiondock-knowledge-inbox
 
-ActionDock 2.x 知识库反馈与追加写入平面（Feedback / Append Plane），专用于知识库自动维护与反馈闭环架构。
+[ActionDock](https://github.com/team4u/actiondock) 知识库反馈与追加写入平面（Feedback / Append Plane），专用于知识库自动维护与反馈闭环架构。
 
 本包运行在服务端，负责收集、检索与归档由人工排障、日常运维及 Agent 排错产生的 Candidate Markdown 文档。
 

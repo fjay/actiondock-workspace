@@ -1,6 +1,6 @@
 # knowledge-server
 
-ActionDock 2.x 云主机一体化知识服务容器（All-in-One Knowledge Server Distribution）。
+[ActionDock](https://github.com/team4u/actiondock) 云主机一体化知识服务容器（All-in-One Knowledge Server Distribution）。
 
 本工程负责在云主机上以 Docker 容器化运行知识中枢，对外提供**原生 HTTPS（端口 443）**服务，并支持 Maintainer Agent 定时通过 SSH 反向触发自动化维护。
 
