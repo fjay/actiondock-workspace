@@ -1,14 +1,52 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # knowledge-maintenance (宿主机包装脚本)
-# 
-# 用途：供 Maintainer Agent 定时通过 SSH 连入云主机时调用
-# 示例：ssh deploy@cloud-host "knowledge-maintenance --config /etc/actiondock/repos.json"
+#
+# 用途：供维护智能体或运维人员在宿主机调用容器内 ActionDock 动作
+# 示例：ssh deploy@cloud-host "knowledge-maintenance sync"
 # 安装：将本脚本拷贝至宿主机 /usr/local/bin/knowledge-maintenance 并赋予执行权限
 # ==============================================================================
 set -euo pipefail
 
 CONTAINER_NAME="${KNOWLEDGE_CONTAINER_NAME:-knowledge-server}"
+
+show_help() {
+    cat <<'EOF'
+用法：
+  knowledge-maintenance <动作名|快捷指令> [动作参数...]
+  knowledge-maintenance --help | -h
+
+说明：
+  knowledge-maintenance 是云主机宿主机环境下的 ActionDock 动作调用包装脚本。
+  支持在宿主机直接调用容器内的特权维护动作与工作区动作，与容器内运行环境保持一致。
+  维护智能体也可通过远端 HTTPS 8443 端口与 skm 特权环境直连，执行相同的纯动作协议。
+
+快捷指令映射：
+  - sync -> maintenance.sync（仓库分支同步）
+  - list -> maintenance.list（待维护变更扫描）
+
+常用调用示例：
+  - 同步仓库分支：
+    knowledge-maintenance sync
+    knowledge-maintenance maintenance.sync -- path="/srv/workspace/my-repo"
+  - 扫描代码变更：
+    knowledge-maintenance list
+    knowledge-maintenance maintenance.list -- path="/srv/workspace/my-repo"
+  - 检查文档链接引用：
+    knowledge-maintenance links.verify -- path="docs/knowledge"
+  - 推进检查点水位：
+    knowledge-maintenance maintenance.complete -- path="/srv/workspace/my-repo" commit="<hash>" actionTaken="docs_updated" summary="..."
+
+远端直连方式：
+  - 维护智能体在受信任网络中可通过 ActionDock 客户端直连 8443 特权维护端口：
+    ad run maintenance.sync --profile skm
+EOF
+}
+
+if [ "$#" -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ "$1" = "help" ]; then
+    show_help
+    exit 0
+fi
 
 # 检查 Docker 服务及容器运行状态
 if ! command -v docker &>/dev/null; then
@@ -21,5 +59,21 @@ if ! docker ps --format '{{.Names}}' | grep -Eq "^${CONTAINER_NAME}\$"; then
     exit 1
 fi
 
-# 调用容器内的维护驱动脚本并传递所有参数
-exec docker exec -i "${CONTAINER_NAME}" run-maintenance.sh "$@"
+# 快捷指令映射
+ACTION="$1"
+shift
+
+case "${ACTION}" in
+    sync)
+        set -- "maintenance.sync" "$@"
+        ;;
+    list)
+        set -- "maintenance.list" "$@"
+        ;;
+    *)
+        set -- "${ACTION}" "$@"
+        ;;
+esac
+
+# 调用容器内的 ActionDock 动作并传递所有参数
+exec docker exec -i "${CONTAINER_NAME}" ad run "$@"

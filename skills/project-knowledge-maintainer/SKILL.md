@@ -19,46 +19,57 @@ metadata:
 |---|---|---|---|---|
 | **模式一：人工更新与开发后局部同步** | 用户日常要求“同步知识库”、“根据代码改动更新文档”或“补充/修正某业务流程” | 本地工作区变更（`git diff`）与用户指令 | 1. 依靠 Git、搜索与阅读能力核查改动<br>2. 执行【范围门槛】与【失效四问】<br>3. 就地局部同步受影响文档（小改动绝不全仓重建）<br>4. 判定不更新在回复中留痕 | [maintenance.md](references/maintenance.md) |
 | **模式二：消费 Knowledge Inbox 候选池** | 定期审核累积候选，或维护者要求“消费/合并待办知识” | `knowledge.list` 扫描待审候选池 | 1. 读 Candidate 内容并核查源码<br>2. 按 layout 合入正式知识库（严禁 1:1 建文件）<br>3. `knowledge.archive` 归档并打标决议 | [inbox-review.md](references/inbox-review.md) |
-| **模式三：自动化代码变更核验** | 云端定时 Agent 驱动脚本 `run-maintenance.sh` 触发，或版本发布前核验 | `maintenance.list` commit 差异 | 1. `maintenance.sync` 分支同步与冲突安全回退<br>2. 运行【更新门槛】与【失效四问】<br>3. 更新知识文档（若失效）<br>4. `maintenance.complete` 必须推进 Checkpoint | [maintenance.md](references/maintenance.md) |
+| **模式三：自动化代码变更核验** | 云端定时维护智能体或调度任务触发，或版本发布前核验 | `maintenance.list` commit 差异 | 1. `maintenance.sync` 分支同步与冲突安全回退<br>2. 运行【更新门槛】与【失效四问】<br>3. 更新知识文档（若失效）<br>4. `maintenance.complete` 必须推进 Checkpoint | [maintenance.md](references/maintenance.md) |
 | **模式四：存量全盘建库与初始化** | 仓库首次接入知识库（`initialInventoryRequired: true`）或用户要求全盘重建 | 仓库源码与历史资料 | 1. 广度发现与类别分工（支持子代理委派）<br>2. 六大单数类别目录必须全部补齐实质文档<br>3. 产出根目录 `index.md` 与 `overview.md` | [coverage.md](references/coverage.md)<br>[layout.md](references/layout.md)<br>[quality.md](references/quality.md) |
 
 ---
 
 ## 核心工具箱速查
 
-> 控制项（`--profile sk`、`--json` 等）写在 `--` 之前，`--` 之后为 Action 入参。远端操作一律复用 `--profile sk`。
+> 控制项（`--profile skm`、`--json` 等）写在 `--` 之前，`--` 之后为 Action 入参。维护操作一律复用 `--profile skm`。
 
-### 1. 远端知识库检索与核验（Read Plane，`--profile sk`）
-- `search.rg`：全工作区跨仓/单仓代码与知识库正则及字面量检索。
-- `files.read`：文本直读文档或源码（默认即为 Raw 纯文本直出，首行附带起止行元数据）。
-- `files.list`：目录层级浏览。
+### 工作区读写、编辑与审查工具（`--profile skm`）
+- `search.rg`：全工作区跨仓或单仓代码与知识库正则及字面量检索。
+- `files.read`：文本分段直读文档或源码，首行附带起止行元数据。
+- `files.write`：文本安全写入，自动创建缺失父目录，支持覆盖控制。
+- `files.edit`：局部受控精准编辑，支持起止行范围限定与多重匹配防冲突保护。
+- `files.delete`：文件与目录安全删除，支持递归控制与工作区根目录防误删。
+- `files.move`：版本感知文件与目录移动，优先通过 Git 保留重命名历史。
+- `files.list`：受控目录层级浏览。
+- `links.verify`：文档链接与引用有效性校验，检测相对路径死链、图片缺失与失效标题锚点。
+- `git.status`：工作区状态审查，返回已暂存、未暂存与未跟踪变更。
+- `git.diff`：受控差异核验，受限于最大输出行数与字节预算。
 
-### 2. Knowledge Inbox 消费与归档（Append / Feedback Plane，`--profile sk`）
+### 候选池消费与归档工具（`--profile skm`）
 - **列出待审候选**：
   ```bash
-  ad run knowledge.list --profile sk -- status="pending"
+  ad run knowledge.list --profile skm -- status="pending"
   ```
 - **归档候选文档**（决议取值：`accepted` / `duplicate` / `insufficient_evidence` / `rejected`）：
   ```bash
-  ad run knowledge.archive --profile sk -- id="<candidateId>" resolution="accepted" note="已合入 <目标文档>"
+  ad run knowledge.archive --profile skm -- id="<candidateId>" resolution="accepted" note="已合入 <目标文档>"
   ```
 
-### 3. 代码变更维护与 Checkpoint（Privileged Maintenance Plane）
-- **仓库分支同步**（自动合入 release 至 docs，遇冲突安全回滚，禁止 force push/reset）：
+### 代码变更维护与检查点推进工具（`--profile skm`）
+- **仓库分支同步**（自动合入 release 至 docs，遇冲突安全回滚，禁止 force push 或 reset；不带 path 参数时默认执行全量批量同步）：
   ```bash
-  ad run maintenance.sync -- path="<repoPath>"
+  # 批量全量同步已配置仓库：
+  ad run maintenance.sync --profile skm
+
+  # 单仓同步：
+  ad run maintenance.sync --profile skm -- path="<repoPath>"
   ```
 - **待维护变更扫描**（比对最新 HEAD 与上次检查点）：
   ```bash
-  ad run maintenance.list -- path="<repoPath>"
+  ad run maintenance.list --profile skm -- path="<repoPath>"
   ```
 - **推进 Checkpoint 水位**（**铁律：无论文档是否修改，核验完毕都必须推进**）：
   ```bash
-  ad run maintenance.complete -- path="<repoPath>" commit="<to_commit>" actionTaken="<docs_updated|no_change_needed>" summary="..."
+  ad run maintenance.complete --profile skm -- path="<repoPath>" commit="<to_commit>" actionTaken="<docs_updated|no_change_needed>" summary="..."
   ```
 - **文档改动提交与推送**（将本地知识文档修改提交并推送到远端知识分支或系统知识库 master 分支）：
   ```bash
-  ad run maintenance.publish -- path="<repoPath>" message="docs: update flow for budget limit"
+  ad run maintenance.publish --profile skm -- path="<repoPath>" message="docs: update flow for budget limit"
   ```
 
 ---
