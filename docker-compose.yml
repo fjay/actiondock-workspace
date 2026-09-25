@@ -17,6 +17,7 @@ services:
       - GIT_BLOBLESS_FETCH=true
     volumes:
       - ./entrypoint.sh:/entrypoint.sh:ro
+      - ./server:/app/server:ro
       # 代码工程工作区 (统一基于 KNOWLEDGE_DATA_DIR 自动衍生，不给单独自定义)
       - ${KNOWLEDGE_DATA_DIR:-/data/knowledge}/workspace:/srv/workspace
       # Knowledge Inbox 待审与归档候选池
@@ -29,3 +30,5 @@ services:
       - ${KNOWLEDGE_DATA_DIR:-/data/knowledge}/certs:/etc/actiondock/certs:ro
       # 维护与系统日志目录
       - ${KNOWLEDGE_DATA_DIR:-/data/knowledge}/logs:/var/log/actiondock
+      # 本地沙盒 Git 裸仓远端目录
+      - ${KNOWLEDGE_DATA_DIR:-/data/knowledge}/remotes:/data/knowledge/remotes

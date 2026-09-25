@@ -30,6 +30,7 @@ WORKDIR /app
 
 COPY package*.json ./
 COPY packages ./packages
+COPY server ./server
 
 # 安装工作空间生产依赖
 RUN npm install --omit=dev --strict-ssl=false && npm cache clean --force
