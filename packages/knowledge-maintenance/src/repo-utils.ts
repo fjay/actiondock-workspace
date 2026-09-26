@@ -189,3 +189,125 @@ export function parseDiffStat(diffOutput: string): DiffStatResult {
 
   return result;
 }
+
+export interface EnsureReposConfigOptions {
+  configPath?: string | undefined;
+  workspaceRoot?: string | undefined;
+  log?: {
+    info: (msg: string, meta?: any) => void;
+    warn: (msg: string, meta?: any) => void;
+    error: (msg: string, meta?: any) => void;
+  } | undefined;
+}
+
+export interface AutoDiscoveredRepoConfig {
+  path: string;
+  repoType: "code" | "system_knowledge";
+  sourceBranch: string;
+  knowledgeBranch?: string;
+}
+
+/**
+ * Ensures a valid repository configuration file exists.
+ * If target configuration file does not exist, scans workspace root for Git repositories
+ * and auto-generates a standard repos.json file.
+ */
+export function ensureReposConfigFile(options?: EnsureReposConfigOptions): string | undefined {
+  const targetPath =
+    options?.configPath && typeof options.configPath === "string" && options.configPath.trim() !== ""
+      ? path.resolve(options.configPath.trim())
+      : "/etc/actiondock/repos.json";
+
+  if (fs.existsSync(targetPath)) {
+    return targetPath;
+  }
+
+  const rawWsRoot =
+    (options?.workspaceRoot && options.workspaceRoot.trim()) ||
+    (process.env.WORKSPACE_ROOT && process.env.WORKSPACE_ROOT.trim()) ||
+    "/srv/workspace";
+
+  const wsRoot = path.resolve(rawWsRoot);
+
+  if (!fs.existsSync(wsRoot)) {
+    return undefined;
+  }
+
+  try {
+    const stat = fs.statSync(wsRoot);
+    if (!stat.isDirectory()) {
+      return undefined;
+    }
+  } catch {
+    return undefined;
+  }
+
+  const discovered: AutoDiscoveredRepoConfig[] = [];
+
+  try {
+    const entries = fs.readdirSync(wsRoot, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) {
+        continue;
+      }
+      let isDir = entry.isDirectory();
+      if (!isDir && entry.isSymbolicLink()) {
+        try {
+          isDir = fs.statSync(path.join(wsRoot, entry.name)).isDirectory();
+        } catch {
+          isDir = false;
+        }
+      }
+      if (isDir) {
+        const subDirPath = path.join(wsRoot, entry.name);
+        const gitDir = path.join(subDirPath, ".git");
+        if (fs.existsSync(gitDir)) {
+          const nameLower = entry.name.toLowerCase();
+          if (nameLower.includes("system-knowledge") || nameLower.includes("knowledge-system")) {
+            discovered.push({
+              path: subDirPath,
+              repoType: "system_knowledge",
+              sourceBranch: "master",
+            });
+          } else {
+            discovered.push({
+              path: subDirPath,
+              repoType: "code",
+              sourceBranch: "release",
+              knowledgeBranch: "docs",
+            });
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    options?.log?.warn?.("Failed to scan workspace directory for repositories", {
+      wsRoot,
+      error: err?.message,
+    });
+    return undefined;
+  }
+
+  discovered.sort((a, b) => a.path.localeCompare(b.path));
+
+  if (discovered.length === 0) {
+    return undefined;
+  }
+
+  try {
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.writeFileSync(targetPath, JSON.stringify(discovered, null, 2) + "\n", "utf8");
+    options?.log?.info?.("Auto-generated repository configuration file from workspace", {
+      targetPath,
+      count: discovered.length,
+    });
+    return targetPath;
+  } catch (err: any) {
+    options?.log?.warn?.("Failed to auto-generate repository configuration file", {
+      targetPath,
+      error: err?.message,
+    });
+    return undefined;
+  }
+}
+

@@ -487,10 +487,10 @@ describe("maintenance.list", () => {
     }
   });
 
-  it("batch scans via WORKSPACE_ROOT scan when config file does not exist", async () => {
+  it("batch scans by auto-generating repos.json from workspace when config file does not exist", async () => {
     const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "list-batch-ws-"));
     const repo1 = path.join(tmpBase, "service-a");
-    const repo2 = path.join(tmpBase, "service-b");
+    const repo2 = path.join(tmpBase, "system-knowledge");
     fs.mkdirSync(path.join(repo1, ".git"), { recursive: true });
     fs.mkdirSync(path.join(repo2, ".git"), { recursive: true });
 
@@ -509,7 +509,7 @@ describe("maintenance.list", () => {
         } else if (cmd === "branch -a --format=%(refname:short)") {
           handle.emitOutput("stdout", "release\nmaster\n");
           handle.emitExit({ code: 0, signal: null });
-        } else if (cmd === "rev-parse release^{commit}") {
+        } else if (cmd.startsWith("rev-parse") && cmd.includes("^{commit}")) {
           handle.emitOutput("stdout", "5555111122223333444455556666777788889999\n");
           handle.emitExit({ code: 0, signal: null });
         } else if (cmd === "config --get remote.origin.url") {
@@ -527,9 +527,24 @@ describe("maintenance.list", () => {
         platform: createTestPlatform({ processDriver: fakeDriver }),
       });
 
+      const targetConfigFile = path.join(tmpBase, "auto-generated-repos.json");
+      assert.equal(fs.existsSync(targetConfigFile), false);
+
       const res = await runtime.run(listAction, {
-        config: "/nonexistent/config/path.json",
+        config: targetConfigFile,
       });
+
+      assert.equal(fs.existsSync(targetConfigFile), true);
+      const generated = JSON.parse(fs.readFileSync(targetConfigFile, "utf8"));
+      assert.equal(Array.isArray(generated), true);
+      assert.equal(generated.length, 2);
+      assert.equal(generated[0].path, repo1);
+      assert.equal(generated[0].repoType, "code");
+      assert.equal(generated[0].sourceBranch, "release");
+      assert.equal(generated[0].knowledgeBranch, "docs");
+      assert.equal(generated[1].path, repo2);
+      assert.equal(generated[1].repoType, "system_knowledge");
+      assert.equal(generated[1].sourceBranch, "master");
 
       assert.equal(res.batch, true);
       assert.equal(res.hasChanges, true);

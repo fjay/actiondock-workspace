@@ -670,10 +670,10 @@ describe("maintenance.sync", () => {
     }
   });
 
-  it("batch synchronizes via WORKSPACE_ROOT scan when config file does not exist", async () => {
+  it("batch synchronizes by auto-generating repos.json from workspace when config file does not exist", async () => {
     const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "sync-batch-ws-"));
     const repo1 = path.join(tmpBase, "repo1");
-    const repo2 = path.join(tmpBase, "repo2");
+    const repo2 = path.join(tmpBase, "system-knowledge");
     fs.mkdirSync(path.join(repo1, ".git"), { recursive: true });
     fs.mkdirSync(path.join(repo2, ".git"), { recursive: true });
 
@@ -695,14 +695,14 @@ describe("maintenance.sync", () => {
         } else if (cmd === "fetch --filter=blob:none origin" || cmd === "fetch origin") {
           handle.emitExit({ code: 0, signal: null });
         } else if (cmd === "branch --list") {
-          handle.emitOutput("stdout", "* master\n");
+          handle.emitOutput("stdout", "* master\n  release\n  docs\n");
           handle.emitExit({ code: 0, signal: null });
         } else if (cmd === "branch -r") {
-          handle.emitOutput("stdout", "  origin/master\n");
+          handle.emitOutput("stdout", "  origin/master\n  origin/release\n  origin/docs\n");
           handle.emitExit({ code: 0, signal: null });
-        } else if (cmd === "rev-parse --verify refs/heads/master") {
+        } else if (cmd.startsWith("rev-parse --verify")) {
           handle.emitExit({ code: 0, signal: null });
-        } else if (cmd === "checkout master" || cmd === "merge --ff-only origin/master") {
+        } else if (cmd.startsWith("checkout") || cmd.startsWith("merge") || cmd.startsWith("push")) {
           handle.emitExit({ code: 0, signal: null });
         } else if (cmd === "rev-parse HEAD") {
           handle.emitOutput("stdout", "eeee111122223333444455556666777788889999\n");
@@ -717,10 +717,24 @@ describe("maintenance.sync", () => {
         platform: createTestPlatform({ processDriver: fakeDriver }),
       });
 
-      // No path and non-existent config: falls back to WORKSPACE_ROOT scan
+      const targetConfigFile = path.join(tmpBase, "auto-generated-repos.json");
+      assert.equal(fs.existsSync(targetConfigFile), false);
+
       const res = await runtime.run(syncAction, {
-        config: "/nonexistent/config/path.json",
+        config: targetConfigFile,
       });
+
+      assert.equal(fs.existsSync(targetConfigFile), true);
+      const generated = JSON.parse(fs.readFileSync(targetConfigFile, "utf8"));
+      assert.equal(Array.isArray(generated), true);
+      assert.equal(generated.length, 2);
+      assert.equal(generated[0].path, repo1);
+      assert.equal(generated[0].repoType, "code");
+      assert.equal(generated[0].sourceBranch, "release");
+      assert.equal(generated[0].knowledgeBranch, "docs");
+      assert.equal(generated[1].path, repo2);
+      assert.equal(generated[1].repoType, "system_knowledge");
+      assert.equal(generated[1].sourceBranch, "master");
 
       assert.equal(res.batch, true);
       assert.equal(res.status, "success");

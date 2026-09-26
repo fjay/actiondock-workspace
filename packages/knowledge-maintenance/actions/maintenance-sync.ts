@@ -3,7 +3,7 @@ import path from "node:path";
 import { defineAction, type ActionContext } from "@actiondock/sdk";
 import type { ActionInput, ActionOutput } from "../.actiondock/generated/actions.d.ts";
 import { GitClient } from "../src/git.ts";
-import { resolveRepoPath, detectRepoType } from "../src/repo-utils.ts";
+import { resolveRepoPath, detectRepoType, ensureReposConfigFile } from "../src/repo-utils.ts";
 import { DEFAULT_GIT_CLONE_TIMEOUT_MS } from "../src/limits.ts";
 
 export type Input = ActionInput<"maintenance.sync">;
@@ -407,12 +407,11 @@ export default defineAction<Input, Output>(async (input, ctx) => {
   // 2. Batch mode: resolve repository configurations
   ctx.log.info("Starting maintenance.sync in batch mode", { config: input.config });
 
-  let configFilePath: string | undefined;
-  if (input.config && typeof input.config === "string" && input.config.trim() !== "") {
-    configFilePath = path.resolve(input.config.trim());
-  } else if (fs.existsSync("/etc/actiondock/repos.json")) {
-    configFilePath = "/etc/actiondock/repos.json";
-  }
+  const configFilePath = ensureReposConfigFile({
+    configPath: input.config,
+    workspaceRoot: process.env.WORKSPACE_ROOT,
+    log: ctx.log,
+  });
 
   const reposToSync: RepoSyncConfig[] = [];
 
@@ -457,27 +456,6 @@ export default defineAction<Input, Output>(async (input, ctx) => {
         conflicts: [],
         message: `Failed to read configuration file ${configFilePath}: ${err.message}`,
       };
-    }
-  } else {
-    // Config file not provided or does not exist: auto-scan WORKSPACE_ROOT
-    const workspaceRoot = process.env.WORKSPACE_ROOT;
-    if (workspaceRoot && fs.existsSync(workspaceRoot)) {
-      ctx.log.info("Scanning WORKSPACE_ROOT for git repositories", { workspaceRoot });
-      try {
-        const entries = fs.readdirSync(workspaceRoot, { withFileTypes: true });
-        for (const entry of entries) {
-          if (entry.isDirectory()) {
-            const subDirPath = path.join(workspaceRoot, entry.name);
-            const gitDir = path.join(subDirPath, ".git");
-            if (fs.existsSync(gitDir)) {
-              reposToSync.push({ path: subDirPath });
-            }
-          }
-        }
-        reposToSync.sort((a, b) => a.path.localeCompare(b.path));
-      } catch (err: any) {
-        ctx.log.error("Failed to scan WORKSPACE_ROOT", { workspaceRoot, error: err.message });
-      }
     }
   }
 

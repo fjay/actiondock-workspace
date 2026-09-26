@@ -7,6 +7,7 @@ import {
   parseDiffStat,
   parseGitLog,
   resolveRepoPath,
+  ensureReposConfigFile,
 } from "../src/repo-utils.ts";
 
 describe("repo-utils", () => {
@@ -104,6 +105,153 @@ describe("repo-utils", () => {
         );
       } finally {
         fs.rmSync(tmpFile, { force: true });
+      }
+    });
+  });
+
+  describe("ensureReposConfigFile", () => {
+    it("returns targetPath directly if configuration file already exists", () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "util-repos-exists-"));
+      const configPath = path.join(tmpDir, "repos.json");
+      fs.writeFileSync(configPath, JSON.stringify([{ path: "/test" }]));
+      try {
+        const result = ensureReposConfigFile({ configPath });
+        assert.equal(result, configPath);
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it("auto-generates repos.json when config file does not exist and workspace contains git repos", () => {
+      const tmpWs = fs.mkdtempSync(path.join(os.tmpdir(), "util-repos-ws-"));
+      const repoCode = path.join(tmpWs, "order-service");
+      const repoSystem = path.join(tmpWs, "system-knowledge");
+      const hiddenDir = path.join(tmpWs, ".hidden-repo");
+      const nonGitDir = path.join(tmpWs, "not-a-repo");
+
+      fs.mkdirSync(path.join(repoCode, ".git"), { recursive: true });
+      fs.mkdirSync(path.join(repoSystem, ".git"), { recursive: true });
+      fs.mkdirSync(path.join(hiddenDir, ".git"), { recursive: true });
+      fs.mkdirSync(nonGitDir, { recursive: true });
+
+      const targetConfig = path.join(tmpWs, "config", "repos.json");
+
+      try {
+        const loggedInfo: any[] = [];
+        const result = ensureReposConfigFile({
+          configPath: targetConfig,
+          workspaceRoot: tmpWs,
+          log: {
+            info: (msg, meta) => loggedInfo.push({ msg, meta }),
+            warn: () => {},
+            error: () => {},
+          },
+        });
+
+        assert.equal(result, targetConfig);
+        assert.equal(fs.existsSync(targetConfig), true);
+
+        const content = JSON.parse(fs.readFileSync(targetConfig, "utf8"));
+        assert.equal(Array.isArray(content), true);
+        assert.equal(content.length, 2);
+
+        // repoCode
+        assert.equal(content[0].path, repoCode);
+        assert.equal(content[0].repoType, "code");
+        assert.equal(content[0].sourceBranch, "release");
+        assert.equal(content[0].knowledgeBranch, "docs");
+
+        // repoSystem
+        assert.equal(content[1].path, repoSystem);
+        assert.equal(content[1].repoType, "system_knowledge");
+        assert.equal(content[1].sourceBranch, "master");
+        assert.equal(content[1].knowledgeBranch, undefined);
+
+        assert.equal(loggedInfo.length, 1);
+        assert.equal(loggedInfo[0].meta.count, 2);
+      } finally {
+        fs.rmSync(tmpWs, { recursive: true, force: true });
+      }
+    });
+
+    it("recognizes knowledge-system directory as system_knowledge repository", () => {
+      const tmpWs = fs.mkdtempSync(path.join(os.tmpdir(), "util-repos-ks-"));
+      const repoKs = path.join(tmpWs, "knowledge-system");
+      fs.mkdirSync(path.join(repoKs, ".git"), { recursive: true });
+      const targetConfig = path.join(tmpWs, "repos.json");
+
+      try {
+        const result = ensureReposConfigFile({
+          configPath: targetConfig,
+          workspaceRoot: tmpWs,
+        });
+
+        assert.equal(result, targetConfig);
+        const content = JSON.parse(fs.readFileSync(targetConfig, "utf8"));
+        assert.equal(content.length, 1);
+        assert.equal(content[0].path, repoKs);
+        assert.equal(content[0].repoType, "system_knowledge");
+        assert.equal(content[0].sourceBranch, "master");
+      } finally {
+        fs.rmSync(tmpWs, { recursive: true, force: true });
+      }
+    });
+
+    it("returns undefined if workspace root contains no git repositories", () => {
+      const tmpWs = fs.mkdtempSync(path.join(os.tmpdir(), "util-repos-empty-"));
+      fs.mkdirSync(path.join(tmpWs, "not-git"));
+      const targetConfig = path.join(tmpWs, "repos.json");
+
+      try {
+        const result = ensureReposConfigFile({
+          configPath: targetConfig,
+          workspaceRoot: tmpWs,
+        });
+        assert.equal(result, undefined);
+        assert.equal(fs.existsSync(targetConfig), false);
+      } finally {
+        fs.rmSync(tmpWs, { recursive: true, force: true });
+      }
+    });
+
+    it("returns undefined if workspace root does not exist", () => {
+      const nonExistentWs = path.join(os.tmpdir(), `non-existent-ws-${Date.now()}`);
+      const targetConfig = path.join(os.tmpdir(), `target-${Date.now()}.json`);
+      const result = ensureReposConfigFile({
+        configPath: targetConfig,
+        workspaceRoot: nonExistentWs,
+      });
+      assert.equal(result, undefined);
+      assert.equal(fs.existsSync(targetConfig), false);
+    });
+
+    it("gracefully catches write errors and returns undefined with warning", () => {
+      const tmpWs = fs.mkdtempSync(path.join(os.tmpdir(), "util-repos-unwritable-"));
+      const repo = path.join(tmpWs, "service-a");
+      fs.mkdirSync(path.join(repo, ".git"), { recursive: true });
+
+      // Use a targetPath that cannot be created as a directory (parent is a regular file)
+      const regularFile = path.join(tmpWs, "file-blocker.txt");
+      fs.writeFileSync(regularFile, "blocking file");
+      const impossibleConfigPath = path.join(regularFile, "sub", "repos.json");
+
+      const loggedWarn: any[] = [];
+      try {
+        const result = ensureReposConfigFile({
+          configPath: impossibleConfigPath,
+          workspaceRoot: tmpWs,
+          log: {
+            info: () => {},
+            warn: (msg, meta) => loggedWarn.push({ msg, meta }),
+            error: () => {},
+          },
+        });
+
+        assert.equal(result, undefined);
+        assert.equal(loggedWarn.length, 1);
+        assert.ok(loggedWarn[0].meta.error);
+      } finally {
+        fs.rmSync(tmpWs, { recursive: true, force: true });
       }
     });
   });
