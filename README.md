@@ -68,6 +68,28 @@ knowledge-server/
     └── knowledge-maintenance/  # [维护平面] 远端同步、差异扫描与 Checkpoint 推进
 ```
 
+宿主机持久化数据目录结构（`${KNOWLEDGE_DATA_DIR:-/data/knowledge}`）：
+
+```text
+/data/knowledge/
+├── state/                      # ActionDock 运行时状态库（保存 global.db 与 runtime.db，确保容器重建后检查点水位永不丢失）
+├── workspace/                  # 待维护工程代码仓工作区（容器挂载至 /srv/workspace）
+├── inbox/                      # 候选知识待审池与归档池（容器挂载至 /srv/knowledge-inbox）
+├── config/                     # 仓库清单配置目录（包含 repos.json，容器挂载至 /etc/actiondock）
+├── certs/                      # 可选自定义 TLS 证书目录（容器挂载至 /etc/actiondock/certs）
+├── logs/                       # 维护与系统日志目录（容器挂载至 /var/log/actiondock）
+└── remotes/                    # 本地沙盒 Git 裸仓远端目录（容器挂载至 /data/knowledge/remotes）
+```
+
+- **宿主机持久化数据目录职责**：
+  - `state/`：ActionDock 运行时状态库，保存 `global.db` 与 `runtime.db`，确保容器重建后检查点水位永不丢失。
+  - `workspace/`：待维护工程代码仓工作区，挂载至容器 `/srv/workspace`。
+  - `inbox/`：候选知识待审池与归档池，挂载至容器 `/srv/knowledge-inbox`。
+  - `config/`：仓库清单配置目录，挂载至容器 `/etc/actiondock`。
+  - `certs/`：可选自定义 TLS 证书目录，挂载至容器 `/etc/actiondock/certs`。
+  - `logs/`：维护与系统运行日志目录，挂载至容器 `/var/log/actiondock`。
+
+
 ---
 
 ## 前置准备
@@ -108,7 +130,7 @@ ACTIONDOCK_AGENT_TOKEN=<填写第二个生成的 64 字符高强度随机令牌>
 # 服务外部暴露端口 (原生 HTTPS 单端口多视图模式，默认 443，通过不同 Bearer Token 自动由虚拟视图路由权限)
 PORT=443
 
-# 宿主机持久化根目录 (所有子目录 workspace/、inbox/、config/、certs/、logs/ 均基于此目录自动创建与衍生，不给自定义)
+# 宿主机持久化根目录 (所有子目录 state/（状态库与检查点 checkpoints 持久化）、workspace/、inbox/、config/、certs/、logs/ 均基于此目录自动创建与衍生，不给自定义)
 KNOWLEDGE_DATA_DIR=/data/knowledge
 
 # 宿主机 SSH 密钥挂载目录 (用于向内部 Git 仓库免密拉取与推送)
