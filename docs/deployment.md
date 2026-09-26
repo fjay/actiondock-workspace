@@ -63,6 +63,31 @@ knowledge-server 基于 ActionDock 框架构建，是一体化知识服务容器
   ```bash
   mkdir -p /data/knowledge/{state,workspace,inbox,config,certs,logs,remotes}
   ```
+
+```mermaid
+flowchart LR
+    subgraph Host["宿主机持久化目录 (KNOWLEDGE_DATA_DIR)"]
+        H_State["state/ (检查点与运行时状态库)"]
+        H_Ws["workspace/ (纳管代码工程工作区)"]
+        H_Inbox["inbox/ (经验待审池与归档池)"]
+        H_Conf["config/ (repos.json 仓库清单)"]
+        H_Certs["certs/ (可选自定义 TLS 证书)"]
+    end
+
+    subgraph Container["容器内环境 (knowledge-server)"]
+        C_State["/root/.actiondock"]
+        C_Ws["/srv/workspace"]
+        C_Inbox["/srv/knowledge-inbox"]
+        C_Conf["/etc/actiondock"]
+        C_Certs["/etc/actiondock/certs:ro"]
+    end
+
+    H_State ===|挂载| C_State
+    H_Ws ===|挂载| C_Ws
+    H_Inbox ===|挂载| C_Inbox
+    H_Conf ===|挂载| C_Conf
+    H_Certs ===|只读挂载| C_Certs
+```
 - **各子目录职责、挂载点与灾难预防详解**：
   - **状态库子目录** `state/`：
     - 宿主机路径：`${KNOWLEDGE_DATA_DIR}/state`
