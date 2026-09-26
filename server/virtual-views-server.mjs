@@ -69,8 +69,8 @@ const ACTION_PACKAGE_MAP = {
   "files.edit": "workspace",
   "files.delete": "workspace",
   "files.move": "workspace",
-  "git.status": "workspace",
-  "git.diff": "workspace",
+  "bash.exec": "workspace",
+  "bash": "workspace",
   "links.verify": "workspace",
   // knowledge
   "knowledge.collect": "knowledge",

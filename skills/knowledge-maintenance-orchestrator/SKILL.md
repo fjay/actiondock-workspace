@@ -108,10 +108,10 @@ metadata:
 - **门禁放行条件**：全面核验相对路径死链、图片资产缺失与失效标题锚点。若存在断链（`brokenCount > 0`），结合 `brokenLinks` 清单使用 `workspace/files.edit` 立即就地修复，直至断链数为零（`brokenCount === 0`）方可放行。
 - **工作区状态与差异审查**：
   ```bash
-  ad run workspace/git.status --profile skm -- path="<repoPath>"
-  ad run workspace/git.diff --profile skm -- path="<repoPath>" -- statOnly:=true
+  ad run workspace/bash.exec --profile skm -- command="git status" cwd="<repoPath>"
+  ad run workspace/bash.exec --profile skm -- command="git diff" cwd="<repoPath>"
   ```
-  确认所有修改完全收敛于文档目录下，严禁误触或修改任何业务源码与构建配置。
+  确认所有修改完全收敛于文档目录下，严禁误触或修改任何业务源码与构建配置。若发生误改，可执行 `command="git restore ."` 立即回滚。
 
 ### 统一发布推送
 

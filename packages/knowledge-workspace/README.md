@@ -33,12 +33,9 @@
 - **路径移动重命名**：`files.move`（完全限定标识：`workspace/files.move`）
   - 核心参数：`from`、`to`、`overwrite`。
   - 特性：跨目录自动补齐父级目录，在 Git 跟踪环境下优先执行 `git mv` 保留历史，否则回退为原子重命名。
-- **版本状态检查**：`git.status`（完全限定标识：`workspace/git.status`）
-  - 核心参数：`path`。
-  - 特性：受控提取结构化工作区与暂存区状态，支持按目录收敛视界并全局过滤敏感凭据文件。
-- **受控差异比对**：`git.diff`（完全限定标识：`workspace/git.diff`）
-  - 核心参数：`path`、`staged`、`statOnly`、`maxLines`、`maxBytes`。
-  - 特性：严格限制输出行数与字节预算，提供结构化变更文件数与行数统计，自动抹除敏感路径差异。
+- **命令直接执行**：`bash.exec`（完全限定标识：`workspace/bash.exec`）
+  - 核心参数：`command`、`cwd`、`timeoutMs`。
+  - 特性：在工作区内直接执行原生终端与版本管理命令（如 `git status`、`git diff`、`git restore`、`npm test`），自动捕获退出码、标准输出与标准错误。
 - **链接引用校验**：`links.verify`（完全限定标识：`workspace/links.verify`）
   - 核心参数：`path`、`checkAnchors`、`ignoreDirs`。
   - 特性：零外部依赖确定性扫描 Markdown 相对文件与文档内标题锚点，过滤网络链接并精确定位失效链接位置与原因。

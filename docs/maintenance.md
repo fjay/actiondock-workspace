@@ -104,13 +104,19 @@ ad describe maintenance/maintenance.sync --profile skm
   ad run workspace/links.verify --profile skm -- path=/srv/workspace/order-service
   ```
 
-### 变更审查：`workspace/git.status` 与 `workspace/git.diff`
+### 变更审查与回滚：`workspace/bash.exec`
 
-- **用途**：自检确保只改动了文档目录，未误动业务代码。
+- **用途**：执行版本状态查看、差异核验与改动回滚，确保只改动文档目录，未误动业务代码。
 - **范例**：
   ```bash
-  ad run workspace/git.status --profile skm -- path=/srv/workspace/order-service
-  ad run workspace/git.diff --profile skm -- path=/srv/workspace/order-service -- statOnly:=true
+  # 查看当前工作区变更状态
+  ad run workspace/bash.exec --profile skm -- command="git status" cwd=/srv/workspace/order-service
+
+  # 查看具体修改差异
+  ad run workspace/bash.exec --profile skm -- command="git diff" cwd=/srv/workspace/order-service
+
+  # 发现误改时执行回滚丢弃修改
+  ad run workspace/bash.exec --profile skm -- command="git restore ." cwd=/srv/workspace/order-service
   ```
 
 ### 文档发布与推进检查点
