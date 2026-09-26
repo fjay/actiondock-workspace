@@ -6,7 +6,7 @@
 
 单仓默认写本仓 `docs/knowledge/`。系统层写用户指定的知识目录、文档仓库或已授权工作区。系统层目录按 layout.md 的系统层布局组织：根目录一个系统 `index.md`（领域清单 + 仓库映射），每个业务领域一个目录，领域内部与仓库层完全同构；新建领域一次建齐全部类别目录。先利用当前会话已给出的路径判断；若多个位置都合理且目标未知，再询问一个输出位置，期间可以继续只读调查。
 
-在容器运行环境中，所有纳管代码仓与系统知识仓均统一部署在统一工作区根目录 `/srv/workspace` 下，呈现同级平铺的拓扑结构（例如 `/srv/workspace/<target-repo>` 与 `/srv/workspace/system-knowledge`）。智能体在单一代码仓内执行维护任务时，完全被授权且应当主动向上探索上级目录（`..`），核验兄弟仓库的源码实现、接口契约以及系统知识仓中的全局资产，消除视野盲区，杜绝凭空推测。
+在容器运行环境中，所有纳管代码仓与系统知识仓均统一部署在统一工作区根目录 `/srv/workspace` 下，呈现同级平铺的拓扑结构（例如 `/srv/workspace/<target-repo>` 与 `/srv/workspace/system-knowledge`）。ActionDock 所有工作区动作均使用绝对路径。智能体在单一代码仓内执行维护任务时，完全被授权且应当主动以绝对路径直接访问兄弟代码仓（`/srv/workspace/<sibling-repo>`）与系统知识仓（`/srv/workspace/system-knowledge`），核验源码实现、接口契约以及全局资产，消除视野盲区，杜绝凭空推测。
 
 生产库 DDL 统一存系统层：根目录 `db-map.md` 登记库名、领域与域名的映射，结构快照统一存根目录 `ddl/data-ddl-{schema}.md`（含「字段语义补丁」节，重导自动保留）；仓库层仅以 `data/data-databases.md` 引用，不持有结构文档。细则见 layout.md。
 
@@ -51,7 +51,7 @@ Agent 先按业务问题或接口、事件、日志、错误码在索引定位�
 - **直接推送权限**：系统知识库允许维护智能体自动维护并直接推送到 `origin/master` 分支，无需挂起或提审。
 - **提交动作**：调用 `maintenance.publish` 动作完成闭环提交与推送：
   ```bash
-  ad run maintenance.publish -- path="<systemKnowledgePath>" repoType="system_knowledge" message="docs(system): sync payment domain flow from order-service"
+  ad run maintenance.publish --profile skm -- path="/srv/workspace/system-knowledge" repoType="system_knowledge" message="docs(system): sync payment domain flow from order-service"
   ```
 - **避免脏工作区**：未提交的本地修改会导致后续定时同步或他人同步时触发 `dirty_worktree` 阻断，因此跨仓修改后必须当场或在流水线收尾时统一执行 `maintenance.publish`。
 

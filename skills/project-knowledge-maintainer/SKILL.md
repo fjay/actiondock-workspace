@@ -86,7 +86,7 @@ metadata:
 - 模式三（自动化代码维护或定时核验）：读 [maintenance.md](references/maintenance.md) 的“自动化定时维护与 Checkpoint 推进”。严守更新门槛与失效四问，推进 Checkpoint。
 - 模式四（新建、重建或补查遗漏）：读 [coverage.md](references/coverage.md) 与 [layout.md](references/layout.md)。先广度发现，再按类别分工深入，最后反向补漏；产出按统一布局落位。
 - 初次写文档或元数据：读 [metadata.md](references/metadata.md)，再按需读下表模板。
-- 跨仓关系：另读 [cross-repository.md](references/cross-repository.md)，明确仓库标识、工作区拓扑、上级目录探索与证据边界。
+- 跨仓关系：另读 [cross-repository.md](references/cross-repository.md)，明确仓库标识、工作区拓扑、绝对路径跨仓探索与证据边界。
 - 内容复查与导航验收：读 [quality.md](references/quality.md)。只读审查不改文档或更新检查位置。
 
 ---
@@ -143,7 +143,7 @@ docs/knowledge/
 - **知识可以渐进扩充**：发现新行为就更新地图，在授权范围内新增或合并主题；合并保留原行为、分支和定位。长流程可引用子流程和公共规则，但各段交接关系必须可追踪。
 - **源码优先，推测有边界**：旧文档和导入材料用于提供线索。区分测试预期与本次执行结果、代码支持的跨仓关系与已确认的实际部署关系。未知外部实现不补写为事实。
 - **布局与命名全局统一**：所有知识库（含系统层各业务领域）使用同一套类别目录和 `{kind}-{topic}.md` 命名，DDL 文档按库一篇 `data-ddl-{schema}.md`；细则以 layout.md 为准，不沿用历史布局，不为局部习惯发明新目录或新前缀。
-- **跨仓探索与上级目录拓扑**：所有被纳管代码仓与系统知识仓均统一平铺存放在工作区根目录（`/srv/workspace`）下。智能体在负责单一代码仓维护时，完全允许且应当主动查看上级目录（`..`）下的兄弟仓库与系统知识仓，跨仓核验 DDL 引用、接口契约与调用链路，杜绝局限在单仓视野。
+- **跨仓探索与绝对路径拓扑**：所有被纳管代码仓与系统知识仓均统一平铺存放在工作区根目录 `/srv/workspace` 下。ActionDock 所有工作区动作均使用绝对路径。智能体在负责单一代码仓维护时，完全允许且应当主动以绝对路径（如 `/srv/workspace/<sibling-repo>` 与 `/srv/workspace/system-knowledge`）访问兄弟仓库与系统知识仓，跨仓核验 DDL 引用、接口契约与调用链路，杜绝局限在单仓视野。
 
 主 Agent 是决策与编排中枢：拆解目标、决定委派粒度、验收结果与最终取舍。宿主支持子代理时，执行性工作尽量委派，不把任何环节写死为"必须亲自做"：
 

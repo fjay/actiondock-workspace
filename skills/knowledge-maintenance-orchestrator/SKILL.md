@@ -20,7 +20,7 @@ metadata:
   - 通过 `ad list --profile skm` 列出远端所有可用动作清单及其功能描述。
   - 通过 `ad describe <action> --profile skm`（例如 `ad describe maintenance.sync --profile skm` 或 `ad describe workspace/files.edit --profile skm`）查询具体动作的完整描述、模式定义（`inputSchema` 与 `outputSchema`）以及推荐的扁平传参示例。
   - 通过 `ad info <package> --profile skm`（例如 `ad info workspace --profile skm`）查看具体工具包内的所有动作与剧本。
-- **协作技能依赖**：在具体文档编写与局部修补环节，主智能体负责调度子智能体，子智能体挂载并遵循 [项目知识库维护技能](../project-knowledge-maintainer/SKILL.md) 深入对应源码执行细粒度核验与文档产出。
+- **协作技能依赖**：在具体文档编写与局部修补环节，主智能体负责调度子智能体，子智能体挂载并遵循 [project-knowledge-maintainer](../project-knowledge-maintainer/SKILL.md) 深入对应源码执行细粒度核验与文档产出。
 
 ---
 
@@ -96,45 +96,30 @@ metadata:
 
 ### 子智能体调度与协作
 
-主智能体与子智能体分工明确、紧密协作，由主智能体负责维护全流程全局编排，子智能体深入代码一线完成知识提取与文档编写：
+主智能体与子智能体分工明确、紧密协作：
 
-- **职责划分**：
-  - **主智能体**：负责维护全流程的全局编排（分支同步、变更扫描、子智能体调度、变更门禁校验、统一发布推送与检查点推进），统一持有特权维护服务（`--profile skm`）。
-  - **子智能体**：挂载并遵循 [项目知识库维护技能](../project-knowledge-maintainer/SKILL.md) 深入对应源码执行细粒度知识核验与文档编写。关于本仓文档与系统知识仓的联动修改、失效四问判定与格式布局，全部依托该技能既有规约自主决策。任务完成后向主智能体汇报改动清单与核验结论。
-- **派发指令与工具透传铁律**：
-  - **显式透传原则**：主智能体在调度子智能体时，必须在派发提示词中显式、完整告知子智能体当前依托 `--profile skm` 特权受控环境，以及有哪些动作可用、具体调用参数方式，杜绝子智能体由于上下文缺失而不知道可用工具或陷入无效摸索。
-  - **特权环境声明**：派发指令必须明确声明运行环境基于 ActionDock 纯动作协议，所有动作调用均需附加 `--profile skm` 配置标识。
-- **子智能体可用特权动作速查清单**：
-  - `workspace/search.rg`：全文检索（`ad run workspace/search.rg --profile skm -- pattern="<keyword>" paths.0="<path>"`）
-  - `workspace/files.read`：分段直读（`ad run workspace/files.read --profile skm -- path="<path>" startLine:=1 maxLines:=2000`）
-  - `workspace/files.edit`：局部受控精准编辑（`ad run workspace/files.edit --profile skm -- path="<path>" targetContent="<old>" replacementContent="<new>"`）
-  - `workspace/files.write`：安全新建或覆盖文档（`ad run workspace/files.write --profile skm -- path="<path>" content="<content>"`）
-  - `workspace/files.list`：目录层级浏览（`ad run workspace/files.list --profile skm -- path="<dir>" depth:=1`）
-  - `workspace/links.verify`：文档链接有效性校验（`ad run workspace/links.verify --profile skm -- path="<repoPath>"`，检测相对死链、图片缺失与失效标题锚点）
-  - `workspace/git.diff` 与 `workspace/git.status`：差异比对与状态自查（`ad run workspace/git.status --profile skm -- path="<repoPath>"` 与 `ad run workspace/git.diff --profile skm -- path="<repoPath>"`）
-  - **模式自省**：若对任何动作入参格式存在疑惑，随时执行 `ad describe <action> --profile skm`（例如 `ad describe workspace/files.edit --profile skm`）获取完整模式定义与传参示例。
-- **断链自检与就地修复闭环（核心交付门禁）**：
-  - **严禁直接退出**：子智能体在完成任何文档的新建（`workspace/files.write`）或修改（`workspace/files.edit`）后，严禁直接退出交差。
-  - **主动死链扫描**：必须主动调用 `ad run workspace/links.verify --profile skm -- path="<repoPath>"` 针对目标仓库或修改文档执行死链扫描。
-  - **就地自愈修复**：若校验结果中存在断链（`brokenCount > 0`），子智能体必须根据返回的 `brokenLinks` 清单（包含出错文件、行号、目标路径或缺失锚点），使用 `workspace/files.edit` 立即就地修复相对链接路径、标题锚点或补充缺失文件，再次执行 `links.verify`，直至断链数为零（`brokenCount === 0`）。
-  - **自检结论汇报**：子智能体向主智能体汇报时，必须明确列出断链自检结果（扫描文件数、校验链接数、断链数为 0），未完成自检与自愈闭环的交付视作未达标。
+- **主子分工原则**：主智能体负责维护全流程全局编排（分支同步、变更扫描、调度分发、变更门禁校验、统一发布推送与检查点推进），持有特权维护服务；子智能体深入代码一线完成知识提取与文档编写。
+- **遵循维护规范**：调度子智能体时，明确要求子智能体挂载并遵循 [project-knowledge-maintainer](../project-knowledge-maintainer/SKILL.md)，关于本仓文档与系统知识仓联动、失效四问判定与格式布局，全部依托该技能既有规约自主决策。
+- **标准派发规范**：主智能体调度子智能体时，必须使用标准派发提示词模板作为唯一的规则事实源，显式透传特权受控环境、工作区绝对路径拓扑、跨仓探索授权、工具清单、数据类资产红线准则以及断链自检自愈门禁，杜绝子智能体因上下文缺失而陷入无效摸索。
 - **标准子智能体派发提示词模板**：
   主智能体调度子智能体时，必须按下述标准模板组装派发指令：
 
   ````markdown
   你正在执行知识中枢维护任务，负责目标仓库的知识库核验与文档编写。
 
-  - **目标仓库工作区路径**：`/srv/workspace/<target-repo>`
-  - **跨仓探索授权**：所有代码仓与系统知识仓平铺于 `/srv/workspace`。已完全授权你访问上级目录（`..`），必要时可查阅兄弟代码仓源码与 `../system-knowledge`（如数据库映射 `db-map.md`、`ddl/` 快照或跨服务调用契约）。
-  - **环境与特权动作工具**：当前依托 ActionDock 特权受控环境（`--profile skm`）。可通过 `ad info --profile skm` 查看所有挂载工具包与能力概览，通过 `ad list --profile skm` 列出所有可用动作。若对任何动作入参格式存在疑惑，可随时执行 `ad describe <action> --profile skm` 自省获取其模式定义与传参示例。常用特权动作包括：
-    - 全文检索：`ad run workspace/search.rg --profile skm -- pattern="<keyword>" paths.0="<path>"`
-    - 分段直读：`ad run workspace/files.read --profile skm -- path="<path>" startLine:=1 maxLines:=2000`
-    - 局部编辑：`ad run workspace/files.edit --profile skm -- path="<path>" targetContent="<old>" replacementContent="<new>"`
-    - 安全写入：`ad run workspace/files.write --profile skm -- path="<path>" content="<content>"`
-    - 目录浏览：`ad run workspace/files.list --profile skm -- path="<dir>" depth:=1`
-    - 文档链接有效性校验：`ad run workspace/links.verify --profile skm -- path="<repoPath>"`
-    - 状态自查与差异比对：`ad run workspace/git.status --profile skm -- path="<repoPath>"` 与 `ad run workspace/git.diff --profile skm -- path="<repoPath>"`
-  - **任务指引与规约**：挂载并严格遵循项目知识库维护技能规范。执行更新门槛与失效四问判定；若需更新或新建，遵守统一目录布局与规范命名。文档编写与修改完成后，必须自主执行断链自检（`ad run workspace/links.verify --profile skm -- path="<repoPath>"`）；若存在断链（`brokenCount > 0`），结合 `brokenLinks` 使用 `workspace/files.edit` 就地自愈修复，直至断链数清零方可向主智能体汇报。
+  - **遵循技能规范**：挂载并严格遵循 project-knowledge-maintainer。执行更新门槛与失效四问判定；若需更新或新建，遵守统一目录布局与规范命名。
+  - **目标仓库绝对路径**：`/srv/workspace/<target-repo>`
+  - **跨仓探索与绝对路径授权**：所有代码仓与系统知识仓平铺于 `/srv/workspace`。ActionDock 所有工作区动作均使用绝对路径，严禁使用上级目录（`..`）。已完全授权你直接以绝对路径访问兄弟代码仓（`/srv/workspace/<sibling-repo>`）与系统知识仓（`/srv/workspace/system-knowledge`）。
+  - **跨仓 DDL 引用与数据类资产约束（红线准则）**：在涉及 `data` 类知识资产构建与核验时，必须首先探索系统知识仓 `/srv/workspace/system-knowledge`。若已存在对应数据库的映射登记（`db-map.md`）与 DDL 快照（`ddl/data-ddl-{schema}.md`），本仓 `data/data-databases.md` 仅作为轻量引用索引，注明涉及表域与数据源标识；若尚未收录，显式登记为知识缺口。严禁在代码仓库自身文档中复制粘贴表结构、列定义、字段类型或建表脚本。
+  - **环境与特权动作工具**：当前依托 ActionDock 特权受控环境（`--profile skm`）。可通过 `ad info --profile skm` 查看所有挂载工具包与能力概览，通过 `ad list --profile skm` 列出所有可用动作，通过 `ad describe <action> --profile skm`（例如 `ad describe workspace/files.edit --profile skm`）自省获取具体动作的模式定义与传参示例。常用特权动作包括：
+    - 全文检索：`ad run workspace/search.rg --profile skm -- pattern="<keyword>" paths.0="/srv/workspace/<path>"`
+    - 分段直读：`ad run workspace/files.read --profile skm -- path="/srv/workspace/<path>" startLine:=1 maxLines:=2000`
+    - 局部编辑：`ad run workspace/files.edit --profile skm -- path="/srv/workspace/<path>" targetContent="<old>" replacementContent="<new>"`
+    - 安全写入：`ad run workspace/files.write --profile skm -- path="/srv/workspace/<path>" content="<content>"`
+    - 目录浏览：`ad run workspace/files.list --profile skm -- path="/srv/workspace/<dir>" depth:=1`
+    - 文档链接有效性校验：`ad run workspace/links.verify --profile skm -- path="/srv/workspace/<repoPath>"`
+    - 状态自查与差异比对：`ad run workspace/git.status --profile skm -- path="/srv/workspace/<repoPath>"` 与 `ad run workspace/git.diff --profile skm -- path="/srv/workspace/<repoPath>"`
+  - **断链自检与就地修复门禁**：完成任何文档的新建或修改后，严禁直接退出交差。必须主动调用 `ad run workspace/links.verify --profile skm -- path="/srv/workspace/<repoPath>"` 进行死链扫描；若存在断链（`brokenCount > 0`），结合 `brokenLinks` 清单使用 `workspace/files.edit` 立即就地修复至零断链（`brokenCount === 0`）方可汇报。
   - **当前具体核验任务**：
     - <具体说明本次代码变更范围、涉及提交或冷启动建库分类范围>
   - **完成汇报要求**：
@@ -144,23 +129,6 @@ metadata:
       - 断链自检与就地修复结果（扫描文件数、校验链接数、断链数须为 0）
       - 工作区状态审查结果
   ````
-
-### 统一工作区拓扑与跨仓上级目录授权
-
-所有被纳管代码仓与系统知识仓均统一部署在统一工作区根目录下：
-
-- **拓扑共存**：所有被纳管代码仓与系统知识仓均统一平铺存放在工作区根目录 `/srv/workspace` 下（例如 `/srv/workspace/<target-repo>` 与 `/srv/workspace/system-knowledge`）。
-- **上级目录探索授权**：明确告知智能体，虽然当前任务聚焦于某一具体目标仓，但完全被授权并且提倡访问上级工作区目录（`..`），以全局视角查看与核验兄弟仓库的源码与文档。
-- **系统知识仓联动**：重点告知智能体在需要查阅数据库映射 `db-map.md`、`ddl/` 快照或上下游调用契约时，直接定位到上级目录中的 `system-knowledge`（或 `../system-knowledge`），杜绝凭空推测。
-
-### 跨仓 DDL 引用与数据类资产约束
-
-在涉及数据类知识资产构建与核验时，严格落实跨仓引用规约与单一事实源原则：
-
-- **核心探索原则**：在为代码仓构建或核验 `data` 类知识资产（如 `data/data-databases.md`）时，维护智能体与派发子智能体必须首先探索系统知识仓（`system-knowledge`）。
-- **有则引用**：若系统知识仓中已存在对应数据库的映射登记（`db-map.md`）与 DDL 快照（`ddl/data-ddl-{schema}.md`），本仓 `data/data-databases.md` 仅作为轻量引用索引，通过相对链接指向系统层的 `db-map.md` 与对应的 `ddl/data-ddl-{schema}.md`，并注明本仓涉及的表域与数据源标识。
-- **无则标缺口**：若系统知识仓中尚未收录该库的映射或 DDL 快照，本仓文档与根目录主索引中必须显式登记为知识缺口，保留追溯线索，待后续系统知识仓集中录入。
-- **严禁复制结构（红线准则）**：严禁在代码仓库自身的 `data/` 文档中复制粘贴表结构、列定义、字段类型或建表脚本。数据库结构事实源统一集中在系统知识仓中，代码仓只引用、不持有，杜绝数据字典冗余与版本漂移。
 
 ### 变更门禁与发布前自检
 
@@ -185,9 +153,9 @@ metadata:
     ```bash
     ad run maintenance/maintenance.publish --profile skm -- path="<repoPath>" message="docs: update knowledge documentation"
     ```
-  - 系统知识仓联动推送：若子智能体遵循维护技能联动修改了系统知识仓，主智能体在收尾时对系统知识仓同样执行闭环推送：
+  - 系统知识仓联动推送：若子智能体遵循 project-knowledge-maintainer 联动修改了系统知识仓，主智能体在收尾时对系统知识仓同样执行闭环推送：
     ```bash
-    ad run maintenance/maintenance.publish --profile skm -- path="<systemKnowledgePath>" repoType="system_knowledge" message="docs(system): sync cross-repository knowledge"
+    ad run maintenance/maintenance.publish --profile skm -- path="/srv/workspace/system-knowledge" repoType="system_knowledge" message="docs(system): sync cross-repository knowledge"
     ```
 
 ### 推进检查点水位（铁律）
