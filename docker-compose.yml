@@ -10,8 +10,8 @@ services:
       - "${PORT:-443}:443"
     environment:
       - PORT=443
-      - ACTIONDOCK_TOKEN=${ACTIONDOCK_TOKEN:?ACTIONDOCK_TOKEN is required}
-      - ACTIONDOCK_AGENT_TOKEN=${ACTIONDOCK_AGENT_TOKEN:?ACTIONDOCK_AGENT_TOKEN is required}
+      - ACTIONDOCK_TOKEN=${ACTIONDOCK_TOKEN:?ACTIONDOCK_TOKEN is required (generate using openssl rand -hex 32)}
+      - ACTIONDOCK_AGENT_TOKEN=${ACTIONDOCK_AGENT_TOKEN:?ACTIONDOCK_AGENT_TOKEN is required (generate using openssl rand -hex 32)}
       - WORKSPACE_ROOT=/srv/workspace
       - KNOWLEDGE_INBOX_ROOT=/srv/knowledge-inbox
       - GIT_BLOBLESS_FETCH=true

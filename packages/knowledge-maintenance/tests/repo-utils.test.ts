@@ -144,6 +144,77 @@ describe("repo-utils", () => {
         fs.rmSync(outsideDir, { recursive: true, force: true });
       }
     });
+
+    it("blocks symlink escaping workspace root to an outside directory", () => {
+      const tmpWs = fs.mkdtempSync(path.join(os.tmpdir(), "util-symlink-ws-"));
+      const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "util-symlink-out-"));
+      const symlinkPath = path.join(tmpWs, "escaped-link");
+      fs.symlinkSync(outsideDir, symlinkPath, "dir");
+
+      const prevWs = process.env.WORKSPACE_ROOT;
+      process.env.WORKSPACE_ROOT = tmpWs;
+
+      try {
+        assert.throws(
+          () => resolveRepoPath(symlinkPath),
+          (err: any) =>
+            err.code === "PATH_FORBIDDEN" &&
+            err.status === 403 &&
+            err.message.includes("Path or symlink target is outside workspace root")
+        );
+      } finally {
+        if (prevWs !== undefined) {
+          process.env.WORKSPACE_ROOT = prevWs;
+        } else {
+          delete process.env.WORKSPACE_ROOT;
+        }
+        fs.rmSync(tmpWs, { recursive: true, force: true });
+        fs.rmSync(outsideDir, { recursive: true, force: true });
+      }
+    });
+
+    it("blocks dangling symlink and ancestor symlink escaping workspace when allowNonExistent is true", () => {
+      const tmpWs = fs.mkdtempSync(path.join(os.tmpdir(), "util-dangling-ws-"));
+      const outsideNonExistent = path.join(os.tmpdir(), `non-existent-${Date.now()}`);
+      const danglingLink = path.join(tmpWs, "dangling-link");
+      fs.symlinkSync(outsideNonExistent, danglingLink);
+
+      const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "util-outside-anc-"));
+      const symlinkDir = path.join(tmpWs, "symlink-dir");
+      fs.symlinkSync(outsideDir, symlinkDir, "dir");
+      const pathUnderSymlinkDir = path.join(symlinkDir, "non-existent-sub");
+
+      const prevWs = process.env.WORKSPACE_ROOT;
+      process.env.WORKSPACE_ROOT = tmpWs;
+
+      try {
+        // Dangling symlink pointing outside
+        assert.throws(
+          () => resolveRepoPath(danglingLink, { allowNonExistent: true }),
+          (err: any) =>
+            err.code === "PATH_FORBIDDEN" &&
+            err.status === 403 &&
+            err.message.includes("Path or symlink target is outside workspace root")
+        );
+
+        // Path whose existing ancestor resolves outside workspace
+        assert.throws(
+          () => resolveRepoPath(pathUnderSymlinkDir, { allowNonExistent: true }),
+          (err: any) =>
+            err.code === "PATH_FORBIDDEN" &&
+            err.status === 403 &&
+            err.message.includes("Path or symlink target is outside workspace root")
+        );
+      } finally {
+        if (prevWs !== undefined) {
+          process.env.WORKSPACE_ROOT = prevWs;
+        } else {
+          delete process.env.WORKSPACE_ROOT;
+        }
+        fs.rmSync(tmpWs, { recursive: true, force: true });
+        fs.rmSync(outsideDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe("ensureReposConfigFile", () => {

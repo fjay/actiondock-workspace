@@ -86,17 +86,21 @@ knowledge-server/
 ## 快速部署流程
 
 ### 克隆工程并配置环境变量
-在云主机上克隆本工程，进入目录：
+在云主机上克隆本工程，复制环境配置模板：
 ```bash
 cp .env.example .env
 ```
-根据云主机实际情况编辑 `.env`：
+执行以下命令生成两个互不相同的高强度随机令牌（长度 64 字符）：
+```bash
+openssl rand -hex 32
+openssl rand -hex 32
+```
+根据云主机实际情况编辑 `.env`，填入生成的专属鉴权令牌：
 ```dotenv
-# 查询服务鉴权令牌 (面向外部查询用户与排障智能体，由 443 端口虚拟视图自动路由至 sk 只读检索与受控追加视图)
-ACTIONDOCK_TOKEN=ad_query_token_9f83b2a7c41d6e05b382f14e7a9c02d5
-
-# 智能体受控维护服务鉴权令牌 (面向内部维护智能体，由 443 端口虚拟视图自动路由至 skm 全量特权视图)
-ACTIONDOCK_AGENT_TOKEN=ad_maintainer_token_8a12d4e7f93c01b2a5d6e8f4c71a3b5e
+# ActionDock 虚拟视图鉴权令牌 (必须手动生成高强度密钥，至少 32 字符，两者绝对不可相同)
+# 推荐生成命令: openssl rand -hex 32
+ACTIONDOCK_TOKEN=<填写首个生成的 64 字符高强度随机令牌>
+ACTIONDOCK_AGENT_TOKEN=<填写第二个生成的 64 字符高强度随机令牌>
 
 # 服务外部暴露端口 (原生 HTTPS 单端口多视图模式，默认 443，通过不同 Bearer Token 自动由虚拟视图路由权限)
 PORT=443

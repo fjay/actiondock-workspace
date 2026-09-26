@@ -49,6 +49,16 @@ if [ "${ACTIONDOCK_TOKEN}" = "${ACTIONDOCK_AGENT_TOKEN}" ]; then
     exit 1
 fi
 
+# 检查是否使用了已知公开的示例占位符 Token
+for token in "${ACTIONDOCK_TOKEN}" "${ACTIONDOCK_AGENT_TOKEN}"; do
+    case "${token}" in
+        *4f8c9b*|*e7a1d2*|*9f83b2a7*|*8a12d4e7*|*your-random-secure*)
+            echo "[SECURITY ERROR] Detected insecure default/example placeholder token. Please generate high-strength random tokens using: openssl rand -hex 32" >&2
+            exit 1
+            ;;
+    esac
+done
+
 # 5. 启动常驻单端口虚拟视图 HTTP 服务 (原生单端口多视图 Virtual Views 模式)
 exec node /app/server/virtual-views-server.mjs
 

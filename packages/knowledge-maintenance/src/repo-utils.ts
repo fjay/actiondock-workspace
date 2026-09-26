@@ -42,8 +42,80 @@ export function resolveRepoPath(
     (fs.existsSync("/srv/workspace") ? "/srv/workspace" : undefined);
   if (rawWsRoot) {
     const wsRoot = path.resolve(rawWsRoot);
-    if (resolved !== wsRoot && !resolved.startsWith(wsRoot + path.sep)) {
+    const realWsRoot = fs.existsSync(wsRoot) ? fs.realpathSync(wsRoot) : path.resolve(wsRoot);
+
+    if (
+      resolved !== wsRoot &&
+      !resolved.startsWith(wsRoot + path.sep) &&
+      resolved !== realWsRoot &&
+      !resolved.startsWith(realWsRoot + path.sep)
+    ) {
       throw new MaintenanceError(`Path is outside workspace root: ${resolved}`, "PATH_FORBIDDEN", 403);
+    }
+
+    if (fs.existsSync(resolved)) {
+      const realResolved = fs.realpathSync(resolved);
+      const isInside =
+        realResolved === realWsRoot ||
+        realResolved.startsWith(`${realWsRoot}${path.sep}`);
+      if (!isInside) {
+        throw new MaintenanceError(
+          `Path or symlink target is outside workspace root: ${resolved}`,
+          "PATH_FORBIDDEN",
+          403
+        );
+      }
+    } else if (options?.allowNonExistent) {
+      // 若候选路径本身是个悬空软链接，检测软链接目标的真实物理路径
+      let isSymlink = false;
+      try {
+        const lstat = fs.lstatSync(resolved);
+        isSymlink = lstat.isSymbolicLink();
+      } catch {
+        // not a symlink / does not exist
+      }
+      if (isSymlink) {
+        try {
+          const linkTarget = fs.readlinkSync(resolved);
+          const resolvedTarget = path.resolve(path.dirname(resolved), linkTarget);
+          const realTarget = fs.existsSync(resolvedTarget)
+            ? fs.realpathSync(resolvedTarget)
+            : resolvedTarget;
+          const insideTarget =
+            realTarget === realWsRoot ||
+            realTarget.startsWith(`${realWsRoot}${path.sep}`);
+          if (!insideTarget) {
+            throw new MaintenanceError(
+              `Path or symlink target is outside workspace root: ${resolved}`,
+              "PATH_FORBIDDEN",
+              403
+            );
+          }
+        } catch (err: any) {
+          if (err instanceof MaintenanceError) throw err;
+        }
+      }
+
+      // 查找其最近存在的祖先目录，获取其 realpath，同样校验该祖先目录的真实物理路径必须在 realWsRoot 之下
+      let checkDir = path.dirname(resolved);
+      while (!fs.existsSync(checkDir)) {
+        const nextDir = path.dirname(checkDir);
+        if (nextDir === checkDir) break;
+        checkDir = nextDir;
+      }
+      if (fs.existsSync(checkDir)) {
+        const realAncestor = fs.realpathSync(checkDir);
+        const insideAncestor =
+          realAncestor === realWsRoot ||
+          realAncestor.startsWith(`${realWsRoot}${path.sep}`);
+        if (!insideAncestor) {
+          throw new MaintenanceError(
+            `Path or symlink target is outside workspace root: ${resolved}`,
+            "PATH_FORBIDDEN",
+            403
+          );
+        }
+      }
     }
   }
   if (!fs.existsSync(resolved)) {

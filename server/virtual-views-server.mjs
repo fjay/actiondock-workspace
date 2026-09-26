@@ -24,17 +24,39 @@ if (SK_TOKEN === AGENT_TOKEN) {
   throw new Error("ACTIONDOCK_TOKEN and ACTIONDOCK_AGENT_TOKEN must not be identical");
 }
 
-// 白名单动作与受控包定义
+// 检查是否使用了已知公开的示例占位符 Token
+const INSECURE_TOKEN_PATTERNS = [
+  "4f8c9b",
+  "e7a1d2",
+  "9f83b2a7",
+  "8a12d4e7",
+  "your-random-secure",
+];
+
+function isKnownInsecureToken(token) {
+  return INSECURE_TOKEN_PATTERNS.some((pattern) => token.includes(pattern));
+}
+
+if (isKnownInsecureToken(SK_TOKEN) || isKnownInsecureToken(AGENT_TOKEN)) {
+  throw new Error(
+    "Detected insecure default/example placeholder token. Please generate high-strength random tokens using: openssl rand -hex 32"
+  );
+}
+
+// 白名单动作与受控包定义 (统一使用完全合格名称 Fully Qualified Action Name)
 const SK_ALLOWLIST = new Set([
-  "search.rg",
-  "files.read",
-  "files.list",
-  "knowledge.collect",
-  "workspace/search.rg",
   "workspace/files.read",
   "workspace/files.list",
+  "workspace/search.rg",
   "knowledge/knowledge.collect",
 ]);
+
+const SK_SHORT_ACTION_MAP = {
+  "files.read": "workspace/files.read",
+  "files.list": "workspace/files.list",
+  "search.rg": "workspace/search.rg",
+  "knowledge.collect": "knowledge/knowledge.collect",
+};
 
 const SKM_PACKAGE_ALLOWLIST = new Set(["workspace", "knowledge", "maintenance"]);
 
@@ -152,6 +174,7 @@ function parseActionTarget(pathname) {
       actionId: act,
       fullAction: `${pkg}/${act}`,
       operation: pkgRunMatch[3],
+      hasPackage: true,
     };
   }
   // 2. /packages/:pkg/actions/:action
@@ -164,6 +187,7 @@ function parseActionTarget(pathname) {
       actionId: act,
       fullAction: `${pkg}/${act}`,
       operation: "describe",
+      hasPackage: true,
     };
   }
   // 3. /actions/:id/(run|start)
@@ -181,6 +205,7 @@ function parseActionTarget(pathname) {
         actionId: act,
         fullAction: rawAction,
         operation: op,
+        hasPackage: true,
       };
     }
     const resolvedPkg = ACTION_PACKAGE_MAP[rawAction];
@@ -189,6 +214,7 @@ function parseActionTarget(pathname) {
       actionId: rawAction,
       fullAction: resolvedPkg ? `${resolvedPkg}/${rawAction}` : rawAction,
       operation: op,
+      hasPackage: false,
     };
   }
   // 4. /actions/:id
@@ -205,6 +231,7 @@ function parseActionTarget(pathname) {
         actionId: act,
         fullAction: rawAction,
         operation: "describe",
+        hasPackage: true,
       };
     }
     const resolvedPkg = ACTION_PACKAGE_MAP[rawAction];
@@ -213,6 +240,7 @@ function parseActionTarget(pathname) {
       actionId: rawAction,
       fullAction: resolvedPkg ? `${resolvedPkg}/${rawAction}` : rawAction,
       operation: "describe",
+      hasPackage: false,
     };
   }
   return null;
@@ -321,13 +349,15 @@ const server = https.createServer({ key, cert }, async (req, res) => {
         const queryRes = await fetch(`http://${INTERNAL_HOST}:${INTERNAL_PORT}/api/v2/actions`);
         const actions = await queryRes.json();
         const filtered = Array.isArray(actions)
-          ? actions.filter(
-              (a) =>
-                SK_ALLOWLIST.has(a.id) ||
-                (a.actionId && SK_ALLOWLIST.has(a.actionId)) ||
-                (a.packageId && SK_ALLOWLIST.has(`${a.packageId}/${a.id}`)) ||
-                (a.packageId && a.actionId && SK_ALLOWLIST.has(`${a.packageId}/${a.actionId}`))
-            )
+          ? actions.filter((a) => {
+              const fullId =
+                a.id && a.id.includes("/")
+                  ? a.id
+                  : a.packageId && (a.actionId || a.id)
+                  ? `${a.packageId}/${a.actionId || a.id}`
+                  : (a.id && SK_SHORT_ACTION_MAP[a.id]) || "";
+              return SK_ALLOWLIST.has(fullId);
+            })
           : [];
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(filtered));
@@ -342,9 +372,16 @@ const server = https.createServer({ key, cert }, async (req, res) => {
     // 放行授权动作描述与执行：仅允许白名单 4 项动作的 GET describe 与 POST run/start
     const actionTarget = parseActionTarget(pathname);
     if (actionTarget) {
-      const allowed =
-        SK_ALLOWLIST.has(actionTarget.actionId) ||
-        SK_ALLOWLIST.has(actionTarget.fullAction);
+      let candidateFullAction = "";
+      if (actionTarget.hasPackage) {
+        // 当请求携带 package（如 /packages/:pkg/actions/:act 或 /actions/:pkg/:act）时，必须仅根据 fullAction 校验，绝不单独匹配 actionId
+        candidateFullAction = actionTarget.fullAction;
+      } else {
+        // 当请求为短路径 /actions/:act 时，将其映射为官方全名
+        candidateFullAction = SK_SHORT_ACTION_MAP[actionTarget.actionId] || "";
+      }
+
+      const allowed = candidateFullAction !== "" && SK_ALLOWLIST.has(candidateFullAction);
 
       if (allowed) {
         if (actionTarget.operation === "describe" && req.method === "GET") {
