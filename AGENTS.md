@@ -3,7 +3,7 @@
 - **核心定位**：knowledge-server 是基于 ActionDock 规范构建的云主机一体化知识服务容器分发，基于原生单端口多视图（Virtual Views）模式统一收敛至 443 端口：面向外部查询用户通过动作级白名单提供只读检索与受控追加视图，面向维护智能体提供具备完整读写与维护能力的受控视图，仅通过鉴权令牌自动隔离权限。
 - **运行时与技术栈**：Node.js（版本大于等于 24.12.0）、Docker、Docker Compose、Git 与 ripgrep。
 - **代码库分层结构**：
-  - `packages/knowledge-workspace`：工作区能力包，提供基于 ripgrep 的工程代码与文档全文检索、受控文件分段直读、目录浏览、安全写入、受控编辑、删除移动、状态差异审查与断链校验。
+  - `packages/knowledge-workspace`：工作区能力包，提供基于 ripgrep 的工程代码与文档全文检索、受控文件分段直读、目录浏览、安全写入、受控编辑、删除移动、原生终端命令执行与断链校验。
   - `packages/knowledge-inbox`：反馈追加平面能力包，负责收集人工排障与日常运维产生的结构化候选文档并写入待审池。
   - `packages/knowledge-maintenance`：特权维护平面能力包，包含双分支代码同步、差异扫描、文档发布提交与检查点推进动作。
   - `config/repos.json.example`：多代码仓与系统知识仓清单配置模板。

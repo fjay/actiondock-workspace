@@ -42,6 +42,19 @@ metadata:
 - `links.verify`：文档链接与引用有效性校验，检测相对路径死链、图片缺失与失效标题锚点。**核心交付门禁**：在任何模式下完成文档新建（`files.write`）或修改（`files.edit`）后，均须就地运行 `links.verify` 执行死链扫描；若返回存在断链（`brokenCount > 0`），必须结合 `brokenLinks` 清单使用 `files.edit` 立即就地自愈修复，直至断链数为零（`brokenCount === 0`）方可交付或推进流程。
 - `bash.exec`：终端命令直接执行，用于执行版本状态查看、差异核验、改动回滚与测试验证（如 `git status`、`git diff`、`git restore .`、`npm test`）。
 
+### 终端执行与改动回滚工具（`--profile skm`）
+- **查看状态、比对差异与变更回滚**：
+  ```bash
+  # 查看工作区版本状态
+  ad run workspace/bash.exec --profile skm -- command="git status" cwd="<repoPath>"
+
+  # 核验具体变更差异
+  ad run workspace/bash.exec --profile skm -- command="git diff" cwd="<repoPath>"
+
+  # 误改时执行一键回滚丢弃修改
+  ad run workspace/bash.exec --profile skm -- command="git restore ." cwd="<repoPath>"
+  ```
+
 ### 候选池消费与归档工具（`--profile skm`）
 - **列出待审候选**：
   ```bash

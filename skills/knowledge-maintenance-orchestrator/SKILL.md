@@ -96,6 +96,7 @@ metadata:
   - 局部编辑：`ad run workspace/files.edit --profile skm -- path="/srv/workspace/<path>" targetContent="<old>" replacementContent="<new>"`
   - 安全写入：`ad run workspace/files.write --profile skm -- path="/srv/workspace/<path>" content="<content>"`
   - 目录浏览：`ad run workspace/files.list --profile skm -- path="/srv/workspace/<dir>" depth:=1`
+  - 终端命令与改动回滚：`ad run workspace/bash.exec --profile skm -- command="git restore ." cwd="/srv/workspace/<path>"`
 
 ### 断链自检自愈门禁
 
