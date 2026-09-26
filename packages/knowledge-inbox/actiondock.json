@@ -38,6 +38,26 @@
               "kafka-lag.md",
               "redis-oom-incident"
             ]
+          },
+          "repos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of associated repository identifiers (e.g. ['order-service', 'payment-service'])",
+            "examples": [
+              [
+                "order-service",
+                "payment-service"
+              ]
+            ]
+          },
+          "repo": {
+            "type": "string",
+            "description": "Optional single repository identifier shortcut or comma-separated list",
+            "examples": [
+              "order-service"
+            ]
           }
         }
       },
@@ -68,6 +88,17 @@
               "pending"
             ],
             "description": "Current lifecycle status of the collected document"
+          },
+          "repos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Associated repository identifiers"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Single or primary associated repository identifier"
           }
         }
       },
@@ -140,6 +171,13 @@
               "2026",
               "2025"
             ]
+          },
+          "repo": {
+            "type": "string",
+            "description": "Optional repository identifier filter. Matches candidate documents associated with this repository.",
+            "examples": [
+              "order-service"
+            ]
           }
         }
       },
@@ -199,6 +237,17 @@
                     "type": "string"
                   },
                   "description": "Tags extracted from frontmatter"
+                },
+                "repos": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Associated repository identifiers extracted from frontmatter"
+                },
+                "repo": {
+                  "type": "string",
+                  "description": "Single or primary associated repository identifier"
                 },
                 "createdAt": {
                   "type": "string",

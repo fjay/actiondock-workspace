@@ -184,3 +184,47 @@ export function extractCandidateYear(
   // 3. Fallback to current UTC year
   return now.getUTCFullYear().toString();
 }
+
+/**
+ * Parse and normalize repository identifiers from strings or arrays.
+ * Handles single strings, comma-separated strings, and string arrays.
+ */
+export function parseRepoList(source: unknown): string[] {
+  if (Array.isArray(source)) {
+    return source
+      .flatMap((item) => {
+        if (typeof item === "string") return item.split(",");
+        if (typeof item === "number" || typeof item === "boolean") return [String(item)];
+        return [];
+      })
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+  }
+  if (typeof source === "string") {
+    return source
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+  }
+  return [];
+}
+
+/**
+ * Extract deduplicated repository identifiers from candidate metadata or input fields.
+ * If inputRepos or inputRepo is provided, input takes precedence.
+ * Otherwise falls back to frontmatter repos or repo.
+ */
+export function normalizeRepos(
+  reposInput?: unknown,
+  repoInput?: unknown,
+  fmRepos?: unknown,
+  fmRepo?: unknown
+): string[] {
+  const inputList = [...parseRepoList(reposInput), ...parseRepoList(repoInput)];
+  if (inputList.length > 0) {
+    return Array.from(new Set(inputList));
+  }
+  const fmList = [...parseRepoList(fmRepos), ...parseRepoList(fmRepo)];
+  return Array.from(new Set(fmList));
+}
+

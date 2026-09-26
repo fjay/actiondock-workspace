@@ -10,44 +10,49 @@
 
 | 组件 / 包 | 定位 | 权限模式 | 职责 |
 |---|---|---|---|
-| `knowledge-workspace` | Read Plane | 只读 (Read Only) | 为 Agent 提供只读工程上下文与文件检索 (`search.rg`, `files.read`, `files.list`) |
-| **`knowledge-inbox`** | **Feedback / Append Plane** | **追加写入 (Append Only)** | **收集、检索与归档人工排障及日常维护产生的候选文档** |
-| `knowledge-maintenance` | Privileged Maintenance Plane | 受控写 (Git Write) | 双分支代码仓/单分支系统知识仓的同步、待维护扫描与 Checkpoint 推进 |
+| `knowledge-workspace` | 工作区只读平面 | 只读 | 为维护智能体提供只读工程上下文与文件检索 (`search.rg`, `files.read`, `files.list`) |
+| `knowledge-inbox` | 反馈追加平面 | 追加写入 | 收集、检索与归档人工排障及日常维护产生的候选文档 |
+| `knowledge-maintenance` | 特权维护平面 | 受控写 | 双分支代码仓与单分支系统知识仓的同步、待维护扫描与检查点推进 |
 
-### 遵循用户的极简原则
-1. **高容错正文接收**：不搞死板复杂的语义切片（如 `<!-- section:xxx -->`）正则门禁检查，以极高的容错性接收任何 Markdown 正文；
-2. **服务端三件事原则**：受控落盘、简单查询、状态归档。
+### 遵循极简原则
+- 高容错正文接收：不搞死板复杂的正则门禁检查，以极高的容错性接收任何 Markdown 正文；
+- 服务端三件事原则：受控落盘、简单查询、状态归档。
 
 ---
 
 ## 核心 Action 规范
 
-### 1. `knowledge.collect`
+### knowledge.collect
 - **入口**：`actions/knowledge-collect.ts`
 - **功能**：
   - 从 `ctx.config.get("KNOWLEDGE_INBOX_ROOT", "/srv/knowledge-inbox")` 读取根路径（支持环境变量 `KNOWLEDGE_INBOX_ROOT` 与配置，目录不存在自动创建）。
-  - 生成安全唯一 ID（例如 `20260924-a1b2c3` 格式的时间戳 + 短哈希）。
-  - 解析 Frontmatter（若有）：保留原有的 `title`、`domain`、`tags` 等自定义字段，追加并覆盖服务端元数据：
+  - 生成安全唯一 ID（例如 `20260924-a1b2c3` 格式的时间戳与短哈希）。
+  - 解析 Frontmatter（若有）：保留原有的 `title`、`domain`、`tags` 等自定义字段，支持关联单仓或多仓标签（入参 `repos` 数组或快捷单仓 `repo`，亦兼容文档自带 frontmatter），追加并覆盖服务端元数据：
     ```yaml
     id: <id>
     created_at: <ISO>
     status: "pending"
+    repos:
+      - <repo1>
+      - <repo2>
+    repo: <repo1> # 仅单仓时写入
     ```
   - 若输入 Markdown 没有 Frontmatter，自动提取首个 H1 标题补上标准 Frontmatter。
   - 生成规范文件名：`<YYYYMMDD-HHmmss>-<shortId>-<safeSlug>.md`（严格防范路径穿越）。
   - 安全写入 `<inboxRoot>/pending/<filename>`。
-  - 返回 `{ id, filename, path, status: "pending" }`。
+  - 返回 `{ id, filename, path, status: "pending", repos, repo }`。
 
-### 2. `knowledge.list`
+### knowledge.list
 - **入口**：`actions/knowledge-list.ts`
 - **功能**：
   - 扫描 `<inboxRoot>/pending` 或 `<inboxRoot>/processed` 下的 `.md` 文件。
   - 支持筛选入参 `status`：`"pending"`（默认）、`"processed"`、`"all"`。
   - 支持按年份筛选入参 `year?: string`（例如 `"2026"`），支持仅扫描该年份目录与结果过滤，亦保持兼容扫描全量年份。
-  - 读取文件头部的 Frontmatter 与目录层级，提取 `id`、`year`、`title`、`domain`、`status`、`tags`、`createdAt`、`archivedAt`、`resolution`、`archiveNote` 等字段。
+  - 支持按代码仓筛选入参 `repo?: string`（按仓库标识筛选，只要候选文档包含该仓库即命中）。
+  - 读取文件头部的 Frontmatter 与目录层级，提取 `id`、`year`、`title`、`domain`、`status`、`tags`、`repos`、`repo`、`createdAt`、`archivedAt`、`resolution`、`archiveNote` 等字段。
   - 按创建时间倒序排序返回 `{ items: [...] }`。
 
-### 3. `knowledge.archive`
+### knowledge.archive
 - **入口**：`actions/knowledge-archive.ts`
 - **功能**：
   - 在 `pending/` 目录中定位对应文件（支持候选文档 `id` 或完整文件名匹配）。若文件不存在抛出 404 错误。
@@ -102,17 +107,28 @@
 
 ## 快速使用示例
 
-### 1. 收集排障候选知识 (`knowledge.collect`)
+### 收集排障候选知识 (`knowledge.collect`)
 ```bash
+# 单仓关联收集
 ad run knowledge.collect \
   content="# Nginx 502 排查经验\n\n检查 php-fpm 进程数与 backlog 连接队列。" \
-  filename="nginx-502-fix"
+  filename="nginx-502-fix" \
+  repo="order-service"
+
+# 多仓跨域关联收集
+ad run knowledge.collect \
+  content="# 分布式事务补偿异常\n\n排查 order-service 与 payment-service 之间的消息丢失。" \
+  filename="saga-compensation" \
+  repos='["order-service", "payment-service"]'
 ```
 
-### 2. 查看待处理列表 (`knowledge.list`)
+### 查看待处理列表 (`knowledge.list`)
 ```bash
 # 查询 pending 候选文档
 ad run knowledge.list
+
+# 按代码仓筛选候选文档
+ad run knowledge.list repo="order-service"
 
 # 查询所有已归档文档
 ad run knowledge.list status="processed"
@@ -121,7 +137,7 @@ ad run knowledge.list status="processed"
 ad run knowledge.list status="processed" year="2026"
 ```
 
-### 3. 归档处理候选知识 (`knowledge.archive`)
+### 归档处理候选知识 (`knowledge.archive`)
 ```bash
 # 采纳合入
 ad run knowledge.archive \
@@ -141,22 +157,22 @@ ad run knowledge.archive \
 ## 本地开发与测试
 
 ```bash
-# 1. 安装依赖
+# 安装依赖
 npm install
 
-# 2. 生成 TypeScript 强类型定义
+# 生成 TypeScript 强类型定义
 ad generate types
 
-# 3. 运行类型检查
+# 运行类型检查
 npm run typecheck
 
-# 4. 校验 ActionDock 配置与 Schema 规范
+# 校验 ActionDock 配置与 Schema 规范
 ad validate
 
-# 5. 执行全量单元测试
+# 执行全量单元测试
 npm test
 
-# 6. 注册至本机全局 ActionDock 注册表
+# 注册至本机全局 ActionDock 注册表
 ad link
 ```
 

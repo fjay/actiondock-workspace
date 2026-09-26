@@ -295,4 +295,205 @@ created_at: '2026-09-24T12:00:00.000Z'
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it("lists pending candidates and extracts single/multi-repo metadata with backward compatibility", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-list-repos-meta-"));
+    try {
+      const runtime = createTestRuntime();
+      runtime.config.set("KNOWLEDGE_INBOX_ROOT", tmpDir);
+
+      const pendingDir = path.join(tmpDir, "pending");
+      fs.mkdirSync(pendingDir, { recursive: true });
+
+      // Multi-repo candidate
+      fs.writeFileSync(
+        path.join(pendingDir, "20260924-110000-111111-multi.md"),
+        `---
+id: 20260924-111111
+status: pending
+repos:
+  - order-service
+  - payment-service
+created_at: '2026-09-24T11:00:00.000Z'
+---
+# Multi Repo Doc`
+      );
+
+      // Single repo candidate
+      fs.writeFileSync(
+        path.join(pendingDir, "20260924-100000-222222-single.md"),
+        `---
+id: 20260924-222222
+status: pending
+repo: payment-service
+created_at: '2026-09-24T10:00:00.000Z'
+---
+# Single Repo Doc`
+      );
+
+      // Legacy candidate without repo
+      fs.writeFileSync(
+        path.join(pendingDir, "20260924-090000-333333-legacy.md"),
+        `---
+id: 20260924-333333
+status: pending
+created_at: '2026-09-24T09:00:00.000Z'
+---
+# Legacy Doc`
+      );
+
+      const result = await runtime.run(listAction, { status: "pending" });
+      assert.equal(result.items.length, 3);
+
+      // Multi-repo
+      assert.equal(result.items[0].id, "20260924-111111");
+      assert.deepEqual(result.items[0].repos, ["order-service", "payment-service"]);
+      assert.equal(result.items[0].repo, undefined);
+
+      // Single repo
+      assert.equal(result.items[1].id, "20260924-222222");
+      assert.equal(result.items[1].repo, "payment-service");
+      assert.deepEqual(result.items[1].repos, ["payment-service"]);
+
+      // Legacy
+      assert.equal(result.items[2].id, "20260924-333333");
+      assert.equal(result.items[2].repo, undefined);
+      assert.equal(result.items[2].repos, undefined);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("filters candidates precisely by repo parameter across single and multi-repo documents", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-list-repo-filter-"));
+    try {
+      const runtime = createTestRuntime();
+      runtime.config.set("KNOWLEDGE_INBOX_ROOT", tmpDir);
+
+      const pendingDir = path.join(tmpDir, "pending");
+      fs.mkdirSync(pendingDir, { recursive: true });
+
+      // Doc 1: order-service + payment-service
+      fs.writeFileSync(
+        path.join(pendingDir, "20260924-110000-aaa111-cross.md"),
+        `---
+id: 20260924-aaa111
+status: pending
+repos:
+  - order-service
+  - payment-service
+created_at: '2026-09-24T11:00:00.000Z'
+---
+# Cross Service`
+      );
+
+      // Doc 2: payment-service only
+      fs.writeFileSync(
+        path.join(pendingDir, "20260924-100000-bbb222-pay.md"),
+        `---
+id: 20260924-bbb222
+status: pending
+repo: payment-service
+created_at: '2026-09-24T10:00:00.000Z'
+---
+# Pay Service`
+      );
+
+      // Doc 3: inventory-service only
+      fs.writeFileSync(
+        path.join(pendingDir, "20260924-090000-ccc333-inv.md"),
+        `---
+id: 20260924-ccc333
+status: pending
+repo: inventory-service
+created_at: '2026-09-24T09:00:00.000Z'
+---
+# Inventory Service`
+      );
+
+      // Doc 4: no repo
+      fs.writeFileSync(
+        path.join(pendingDir, "20260924-080000-ddd444-none.md"),
+        `---
+id: 20260924-ddd444
+status: pending
+created_at: '2026-09-24T08:00:00.000Z'
+---
+# No Repo Doc`
+      );
+
+      // 1. Filter by order-service: should match only Doc 1
+      const resultOrder = await runtime.run(listAction, { repo: "order-service" });
+      assert.equal(resultOrder.items.length, 1);
+      assert.equal(resultOrder.items[0].id, "20260924-aaa111");
+
+      // 2. Filter by payment-service: should match Doc 1 and Doc 2
+      const resultPay = await runtime.run(listAction, { repo: "payment-service" });
+      assert.equal(resultPay.items.length, 2);
+      assert.equal(resultPay.items[0].id, "20260924-aaa111");
+      assert.equal(resultPay.items[1].id, "20260924-bbb222");
+
+      // 3. Filter by inventory-service: should match only Doc 3
+      const resultInv = await runtime.run(listAction, { repo: "inventory-service" });
+      assert.equal(resultInv.items.length, 1);
+      assert.equal(resultInv.items[0].id, "20260924-ccc333");
+
+      // 4. Filter by non-existent repo: should return 0 items
+      const resultNone = await runtime.run(listAction, { repo: "user-service" });
+      assert.equal(resultNone.items.length, 0);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("filters processed candidates by repo and status", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-list-proc-repo-"));
+    try {
+      const runtime = createTestRuntime();
+      runtime.config.set("KNOWLEDGE_INBOX_ROOT", tmpDir);
+
+      const dir2026 = path.join(tmpDir, "processed", "2026", "accepted");
+      fs.mkdirSync(dir2026, { recursive: true });
+
+      fs.writeFileSync(
+        path.join(dir2026, "20260924-110000-p1-system.md"),
+        `---
+id: 20260924-p1
+status: processed
+resolution: accepted
+repo: system-knowledge
+created_at: '2026-09-24T11:00:00.000Z'
+---
+# System Doc`
+      );
+
+      fs.writeFileSync(
+        path.join(dir2026, "20260924-100000-p2-order.md"),
+        `---
+id: 20260924-p2
+status: processed
+resolution: accepted
+repo: order-service
+created_at: '2026-09-24T10:00:00.000Z'
+---
+# Order Doc`
+      );
+
+      const resSystem = await runtime.run(listAction, {
+        status: "processed",
+        repo: "system-knowledge",
+      });
+      assert.equal(resSystem.items.length, 1);
+      assert.equal(resSystem.items[0].id, "20260924-p1");
+      assert.equal(resSystem.items[0].repo, "system-knowledge");
+
+      const resOther = await runtime.run(listAction, {
+        status: "processed",
+        repo: "other-repo",
+      });
+      assert.equal(resOther.items.length, 0);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

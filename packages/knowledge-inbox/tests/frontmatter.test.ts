@@ -9,6 +9,8 @@ import {
   buildCandidateFilename,
   serializeMarkdownWithFrontmatter,
   extractCandidateYear,
+  parseRepoList,
+  normalizeRepos,
 } from "../src/frontmatter.ts";
 
 describe("frontmatter utilities", () => {
@@ -140,5 +142,61 @@ Body content`;
       extractCandidateYear(undefined, "unknown-id", mockNow),
       "2030"
     );
+  });
+
+  it("parseRepoList handles arrays, comma-separated strings, numbers, and cleans whitespace", () => {
+    assert.deepEqual(parseRepoList(["order-service", "payment-service"]), [
+      "order-service",
+      "payment-service",
+    ]);
+    assert.deepEqual(parseRepoList("order-service, payment-service , auth"), [
+      "order-service",
+      "payment-service",
+      "auth",
+    ]);
+    assert.deepEqual(parseRepoList(["order-service, payment-service", "gateway"]), [
+      "order-service",
+      "payment-service",
+      "gateway",
+    ]);
+    assert.deepEqual(parseRepoList(null), []);
+    assert.deepEqual(parseRepoList(undefined), []);
+    assert.deepEqual(parseRepoList("   "), []);
+    assert.deepEqual(parseRepoList(["  ", ""]), []);
+  });
+
+  it("normalizeRepos deduplicates and prioritizes input over frontmatter", () => {
+    // 1. Array input
+    assert.deepEqual(
+      normalizeRepos(["order-service", "payment-service"], undefined, undefined, undefined),
+      ["order-service", "payment-service"]
+    );
+    // 2. Single repo string input
+    assert.deepEqual(
+      normalizeRepos(undefined, "order-service", undefined, undefined),
+      ["order-service"]
+    );
+    // 3. Comma-separated repo string input
+    assert.deepEqual(
+      normalizeRepos(undefined, "order-service, payment-service", undefined, undefined),
+      ["order-service", "payment-service"]
+    );
+    // 4. Combined repos and repo inputs deduplicated
+    assert.deepEqual(
+      normalizeRepos(["order-service"], "order-service, payment-service", undefined, undefined),
+      ["order-service", "payment-service"]
+    );
+    // 5. Input takes precedence over frontmatter
+    assert.deepEqual(
+      normalizeRepos(undefined, "order-service", ["old-repo"], "legacy-repo"),
+      ["order-service"]
+    );
+    // 6. Fallback to frontmatter repos / repo
+    assert.deepEqual(
+      normalizeRepos(undefined, undefined, ["front-repo"], "single-repo"),
+      ["front-repo", "single-repo"]
+    );
+    // 7. No repos returns empty array
+    assert.deepEqual(normalizeRepos(undefined, undefined, undefined, undefined), []);
   });
 });

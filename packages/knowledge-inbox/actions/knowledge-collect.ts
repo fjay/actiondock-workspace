@@ -10,6 +10,7 @@ import {
   generateCandidateId,
   buildCandidateFilename,
   serializeMarkdownWithFrontmatter,
+  normalizeRepos,
 } from "../src/frontmatter.ts";
 import {
   getInboxRoot,
@@ -24,6 +25,8 @@ export default defineAction<Input, Output>(async (input, ctx) => {
   ctx.log.info("Starting knowledge.collect", {
     suggestedFilename: input.filename,
     contentLength: input.content ? input.content.length : 0,
+    reposInput: input.repos,
+    repoInput: input.repo,
   });
 
   // 1. Validate content input
@@ -54,6 +57,24 @@ export default defineAction<Input, Output>(async (input, ctx) => {
     const heading = extractFirstHeading(parsed.body);
     if (heading) {
       frontmatterData.title = heading;
+    }
+  }
+
+  // Extract and normalize repos
+  const repos = normalizeRepos(
+    input.repos,
+    input.repo,
+    frontmatterData.repos,
+    frontmatterData.repo
+  );
+
+  // Persist repos into frontmatter
+  if (repos.length > 0) {
+    frontmatterData.repos = repos;
+    if (repos.length === 1) {
+      frontmatterData.repo = repos[0];
+    } else {
+      delete frontmatterData.repo;
     }
   }
 
@@ -89,6 +110,8 @@ export default defineAction<Input, Output>(async (input, ctx) => {
     id,
     filename: safeFilename,
     path: targetFilePath,
+    repos: repos.length > 0 ? repos : undefined,
+    repo: repos.length === 1 ? repos[0] : undefined,
   });
 
   return {
@@ -96,5 +119,7 @@ export default defineAction<Input, Output>(async (input, ctx) => {
     filename: safeFilename,
     path: targetFilePath,
     status: "pending",
+    ...(repos.length > 0 ? { repos } : {}),
+    ...(repos.length === 1 ? { repo: repos[0] } : {}),
   };
 });

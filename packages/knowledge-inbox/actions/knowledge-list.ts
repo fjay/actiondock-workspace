@@ -7,6 +7,7 @@ import {
   parseFrontmatter,
   extractFirstHeading,
   extractCandidateYear,
+  normalizeRepos,
 } from "../src/frontmatter.ts";
 import { getInboxRoot, scanMarkdownFiles } from "../src/storage.ts";
 
@@ -37,6 +38,14 @@ export default defineAction<Input, Output>(async (input, ctx) => {
     }
   }
 
+  let filterRepo: string | undefined;
+  if (input.repo !== undefined && input.repo !== null) {
+    const trimmedRepo = String(input.repo).trim();
+    if (trimmedRepo) {
+      filterRepo = trimmedRepo;
+    }
+  }
+
   const inboxRoot = getInboxRoot(ctx);
   const pendingDir = path.join(inboxRoot, "pending");
   const processedDir = path.join(inboxRoot, "processed");
@@ -44,6 +53,7 @@ export default defineAction<Input, Output>(async (input, ctx) => {
   ctx.log.info("Starting knowledge.list", {
     filterStatus,
     filterYear,
+    filterRepo,
     inboxRoot,
   });
 
@@ -176,6 +186,19 @@ export default defineAction<Input, Output>(async (input, ctx) => {
         continue;
       }
 
+      // Extract candidate repos
+      const candidateRepos = normalizeRepos(
+        undefined,
+        undefined,
+        data.repos,
+        data.repo
+      );
+
+      // Filter by repo if specified
+      if (filterRepo && !candidateRepos.includes(filterRepo)) {
+        continue;
+      }
+
       const item: Output["items"][number] = {
         id,
         filename: baseName,
@@ -185,6 +208,12 @@ export default defineAction<Input, Output>(async (input, ctx) => {
         ...(title ? { title } : {}),
         ...(domain ? { domain } : {}),
         ...(tags && tags.length > 0 ? { tags } : {}),
+        ...(candidateRepos.length > 0 ? { repos: candidateRepos } : {}),
+        ...(candidateRepos.length === 1
+          ? { repo: candidateRepos[0] }
+          : typeof data.repo === "string" && data.repo.trim()
+            ? { repo: data.repo.trim() }
+            : {}),
         ...(createdAt ? { createdAt } : {}),
         ...(archivedAt ? { archivedAt } : {}),
         ...(resolution ? { resolution } : {}),
@@ -212,6 +241,7 @@ export default defineAction<Input, Output>(async (input, ctx) => {
   ctx.log.info("Completed knowledge.list", {
     filterStatus,
     filterYear,
+    filterRepo,
     count: items.length,
   });
 
