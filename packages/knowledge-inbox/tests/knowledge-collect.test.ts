@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { createTestRuntime } from "@actiondock/testing";
 import collectAction from "../actions/knowledge-collect.ts";
+import listAction from "../actions/knowledge-list.ts";
 import { parseFrontmatter } from "../src/frontmatter.ts";
 
 describe("knowledge.collect", () => {
@@ -141,54 +142,62 @@ Object storage latency spiked due to disk scrub operations.`;
     }
   });
 
-  it("successfully collects candidate with single repo, persisting both repos and repo to frontmatter and output", async () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-collect-single-repo-"));
+  it("successfully collects candidate with repos in frontmatter, persisting repos to disk frontmatter", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-collect-fm-repos-"));
     try {
       const runtime = createTestRuntime();
       runtime.config.set("KNOWLEDGE_INBOX_ROOT", tmpDir);
 
-      const content = `# Order Payment Timeout
+      const content = `---
+title: Order Payment Timeout
+repos:
+  - order-service
+---
+# Order Payment Timeout
 When order-service fails to reach payment-service, check RPC timeout settings.`;
 
       const result = await runtime.run(collectAction, {
         content,
-        repo: "order-service",
         filename: "order-payment-timeout",
       });
 
       assert.equal(result.status, "pending");
-      assert.equal(result.repo, "order-service");
-      assert.deepEqual(result.repos, ["order-service"]);
+      assert.ok(result.id);
+      assert.ok(result.filename);
+      assert.ok(result.path);
 
       const fileText = fs.readFileSync(result.path, "utf-8");
       const parsed = parseFrontmatter(fileText);
 
-      assert.equal(parsed.data.repo, "order-service");
       assert.deepEqual(parsed.data.repos, ["order-service"]);
+      assert.equal(parsed.data.repo, undefined);
       assert.equal(parsed.data.title, "Order Payment Timeout");
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
-  it("successfully collects candidate with multi-repo array, persisting repos to frontmatter and output", async () => {
+  it("successfully collects candidate with multi-repo array in frontmatter", async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-collect-multi-repos-"));
     try {
       const runtime = createTestRuntime();
       runtime.config.set("KNOWLEDGE_INBOX_ROOT", tmpDir);
 
-      const content = `# Distributed Transaction Compensation
+      const content = `---
+title: Distributed Transaction Compensation
+repos:
+  - order-service
+  - payment-service
+---
+# Distributed Transaction Compensation
 Saga pattern failure between order-service and payment-service.`;
 
       const result = await runtime.run(collectAction, {
         content,
-        repos: ["order-service", "payment-service"],
         filename: "saga-compensation",
       });
 
       assert.equal(result.status, "pending");
-      assert.deepEqual(result.repos, ["order-service", "payment-service"]);
-      assert.equal(result.repo, undefined);
 
       const fileText = fs.readFileSync(result.path, "utf-8");
       const parsed = parseFrontmatter(fileText);
@@ -200,31 +209,8 @@ Saga pattern failure between order-service and payment-service.`;
     }
   });
 
-  it("supports comma-separated repo string input", async () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-collect-comma-repo-"));
-    try {
-      const runtime = createTestRuntime();
-      runtime.config.set("KNOWLEDGE_INBOX_ROOT", tmpDir);
-
-      const content = "Cross-service latency troubleshooting notes.";
-      const result = await runtime.run(collectAction, {
-        content,
-        repo: "order-service, payment-service",
-      });
-
-      assert.deepEqual(result.repos, ["order-service", "payment-service"]);
-      assert.equal(result.repo, undefined);
-
-      const fileText = fs.readFileSync(result.path, "utf-8");
-      const parsed = parseFrontmatter(fileText);
-      assert.deepEqual(parsed.data.repos, ["order-service", "payment-service"]);
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
-
-  it("extracts and normalizes repos from existing markdown frontmatter when input does not specify repo", async () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-collect-fm-repos-"));
+  it("extracts and normalizes legacy repo frontmatter field into repos array", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-collect-legacy-repo-"));
     try {
       const runtime = createTestRuntime();
       runtime.config.set("KNOWLEDGE_INBOX_ROOT", tmpDir);
@@ -238,13 +224,37 @@ Standard maintenance procedures.`;
 
       const result = await runtime.run(collectAction, { content });
 
-      assert.equal(result.repo, "system-knowledge");
-      assert.deepEqual(result.repos, ["system-knowledge"]);
+      assert.equal(result.status, "pending");
 
       const fileText = fs.readFileSync(result.path, "utf-8");
       const parsed = parseFrontmatter(fileText);
-      assert.equal(parsed.data.repo, "system-knowledge");
       assert.deepEqual(parsed.data.repos, ["system-knowledge"]);
+      assert.equal(parsed.data.repo, undefined);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("normalizes comma-separated legacy repo string from frontmatter into repos array", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-collect-comma-repo-"));
+    try {
+      const runtime = createTestRuntime();
+      runtime.config.set("KNOWLEDGE_INBOX_ROOT", tmpDir);
+
+      const content = `---
+title: Cross Service Latency
+repo: "order-service, payment-service"
+---
+Cross-service latency troubleshooting notes.`;
+
+      const result = await runtime.run(collectAction, { content });
+
+      assert.equal(result.status, "pending");
+
+      const fileText = fs.readFileSync(result.path, "utf-8");
+      const parsed = parseFrontmatter(fileText);
+      assert.deepEqual(parsed.data.repos, ["order-service", "payment-service"]);
+      assert.equal(parsed.data.repo, undefined);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -261,13 +271,57 @@ No repository associated.`;
 
       const result = await runtime.run(collectAction, { content });
 
-      assert.equal(result.repo, undefined);
-      assert.equal(result.repos, undefined);
+      assert.equal(result.status, "pending");
 
       const fileText = fs.readFileSync(result.path, "utf-8");
       const parsed = parseFrontmatter(fileText);
       assert.equal(parsed.data.repo, undefined);
       assert.equal(parsed.data.repos, undefined);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("collects document with frontmatter repos, verifies disk frontmatter, and allows knowledge.list to extract and filter by repo", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "kb-collect-list-integration-"));
+    try {
+      const runtime = createTestRuntime();
+      runtime.config.set("KNOWLEDGE_INBOX_ROOT", tmpDir);
+
+      const content = `---
+title: Order Payment Timeout Solution
+repos:
+  - order-service
+---
+# Order Payment Timeout Solution
+Fix RPC client connection pooling.`;
+
+      const collectResult = await runtime.run(collectAction, {
+        content,
+        filename: "order-timeout-fix",
+      });
+
+      assert.equal(collectResult.status, "pending");
+      assert.ok(collectResult.id);
+      assert.equal((collectResult as any).repos, undefined);
+      assert.equal((collectResult as any).repo, undefined);
+
+      // Verify file on disk has repos array in frontmatter and no repo field
+      const diskContent = fs.readFileSync(collectResult.path, "utf-8");
+      const parsed = parseFrontmatter(diskContent);
+      assert.deepEqual(parsed.data.repos, ["order-service"]);
+      assert.equal(parsed.data.repo, undefined);
+
+      // Verify knowledge.list extracts repos and filters by repo
+      const listMatch = await runtime.run(listAction, { repo: "order-service" });
+      assert.equal(listMatch.items.length, 1);
+      assert.equal(listMatch.items[0].id, collectResult.id);
+      assert.deepEqual(listMatch.items[0].repos, ["order-service"]);
+      assert.equal((listMatch.items[0] as any).repo, undefined);
+
+      // Filter by unrelated repo returns empty
+      const listMismatch = await runtime.run(listAction, { repo: "other-service" });
+      assert.equal(listMismatch.items.length, 0);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

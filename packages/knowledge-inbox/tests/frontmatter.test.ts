@@ -165,38 +165,33 @@ Body content`;
     assert.deepEqual(parseRepoList(["  ", ""]), []);
   });
 
-  it("normalizeRepos deduplicates and prioritizes input over frontmatter", () => {
-    // 1. Array input
+  it("normalizeRepos deduplicates repos and handles array and legacy frontmatter fallback", () => {
+    // 1. Frontmatter repos array
     assert.deepEqual(
-      normalizeRepos(["order-service", "payment-service"], undefined, undefined, undefined),
+      normalizeRepos(undefined, undefined, ["order-service", "payment-service"], undefined),
       ["order-service", "payment-service"]
     );
-    // 2. Single repo string input
+    // 2. Legacy single repo string frontmatter
     assert.deepEqual(
-      normalizeRepos(undefined, "order-service", undefined, undefined),
+      normalizeRepos(undefined, undefined, undefined, "order-service"),
       ["order-service"]
     );
-    // 3. Comma-separated repo string input
+    // 3. Legacy comma-separated repo string frontmatter
     assert.deepEqual(
-      normalizeRepos(undefined, "order-service, payment-service", undefined, undefined),
+      normalizeRepos(undefined, undefined, undefined, "order-service, payment-service"),
       ["order-service", "payment-service"]
     );
-    // 4. Combined repos and repo inputs deduplicated
+    // 4. Combined frontmatter repos and legacy repo deduplicated
     assert.deepEqual(
-      normalizeRepos(["order-service"], "order-service, payment-service", undefined, undefined),
+      normalizeRepos(undefined, undefined, ["order-service"], "order-service, payment-service"),
       ["order-service", "payment-service"]
     );
-    // 5. Input takes precedence over frontmatter
+    // 5. Input repos takes precedence over frontmatter if provided
     assert.deepEqual(
-      normalizeRepos(undefined, "order-service", ["old-repo"], "legacy-repo"),
-      ["order-service"]
+      normalizeRepos(["new-service"], undefined, ["old-repo"], "legacy-repo"),
+      ["new-service"]
     );
-    // 6. Fallback to frontmatter repos / repo
-    assert.deepEqual(
-      normalizeRepos(undefined, undefined, ["front-repo"], "single-repo"),
-      ["front-repo", "single-repo"]
-    );
-    // 7. No repos returns empty array
+    // 6. No repos returns empty array
     assert.deepEqual(normalizeRepos(undefined, undefined, undefined, undefined), []);
   });
 });

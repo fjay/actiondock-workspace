@@ -27,7 +27,7 @@
 - **功能**：
   - 从 `ctx.config.get("KNOWLEDGE_INBOX_ROOT", "/srv/knowledge-inbox")` 读取根路径（支持环境变量 `KNOWLEDGE_INBOX_ROOT` 与配置，目录不存在自动创建）。
   - 生成安全唯一 ID（例如 `20260924-a1b2c3` 格式的时间戳与短哈希）。
-  - 解析 Frontmatter（若有）：保留原有的 `title`、`domain`、`tags` 等自定义字段，支持关联单仓或多仓标签（入参 `repos` 数组或快捷单仓 `repo`，亦兼容文档自带 frontmatter），追加并覆盖服务端元数据：
+  - 解析 Frontmatter（若有）：保留原有的 `title`、`domain`、`tags`、`repos` 等字段（亦兼容历史文档的 `repo`），追加并覆盖服务端元数据：
     ```yaml
     id: <id>
     created_at: <ISO>
@@ -35,12 +35,11 @@
     repos:
       - <repo1>
       - <repo2>
-    repo: <repo1> # 仅单仓时写入
     ```
   - 若输入 Markdown 没有 Frontmatter，自动提取首个 H1 标题补上标准 Frontmatter。
   - 生成规范文件名：`<YYYYMMDD-HHmmss>-<shortId>-<safeSlug>.md`（严格防范路径穿越）。
   - 安全写入 `<inboxRoot>/pending/<filename>`。
-  - 返回 `{ id, filename, path, status: "pending", repos, repo }`。
+  - 返回 `{ id, filename, path, status: "pending" }`。
 
 ### knowledge.list
 - **入口**：`actions/knowledge-list.ts`
@@ -49,7 +48,7 @@
   - 支持筛选入参 `status`：`"pending"`（默认）、`"processed"`、`"all"`。
   - 支持按年份筛选入参 `year?: string`（例如 `"2026"`），支持仅扫描该年份目录与结果过滤，亦保持兼容扫描全量年份。
   - 支持按代码仓筛选入参 `repo?: string`（按仓库标识筛选，只要候选文档包含该仓库即命中）。
-  - 读取文件头部的 Frontmatter 与目录层级，提取 `id`、`year`、`title`、`domain`、`status`、`tags`、`repos`、`repo`、`createdAt`、`archivedAt`、`resolution`、`archiveNote` 等字段。
+  - 读取文件头部的 Frontmatter 与目录层级，提取 `id`、`year`、`title`、`domain`、`status`、`tags`、`repos`、`createdAt`、`archivedAt`、`resolution`、`archiveNote` 等字段。
   - 按创建时间倒序排序返回 `{ items: [...] }`。
 
 ### knowledge.archive
@@ -109,17 +108,15 @@
 
 ### 收集排障候选知识 (`knowledge.collect`)
 ```bash
-# 单仓关联收集
+# 收集排障候选知识（通过文档自带 Frontmatter 指定关联仓库）
 ad run knowledge.collect \
-  content="# Nginx 502 排查经验\n\n检查 php-fpm 进程数与 backlog 连接队列。" \
-  filename="nginx-502-fix" \
-  repo="order-service"
+  content="---\ntitle: Nginx 502 排查经验\nrepos:\n  - order-service\n---\n\n检查 php-fpm 进程数与 backlog 连接队列。" \
+  filename="nginx-502-fix"
 
-# 多仓跨域关联收集
+# 多仓跨域候选知识收集
 ad run knowledge.collect \
-  content="# 分布式事务补偿异常\n\n排查 order-service 与 payment-service 之间的消息丢失。" \
-  filename="saga-compensation" \
-  repos='["order-service", "payment-service"]'
+  content="---\ntitle: 分布式事务补偿异常\nrepos:\n  - order-service\n  - payment-service\n---\n\n排查 order-service 与 payment-service 之间的消息丢失。" \
+  filename="saga-compensation"
 ```
 
 ### 查看待处理列表 (`knowledge.list`)

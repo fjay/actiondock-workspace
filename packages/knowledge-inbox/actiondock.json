@@ -27,7 +27,7 @@
             "description": "Markdown text content of the candidate knowledge document",
             "examples": [
               "# MySQL Connection Timeout Solution\n\nWhen encountering error 2006 (HY000), adjust wait_timeout in my.cnf.",
-              "---\ntitle: Kafka Lag Alert Remediation\ndomain: messaging\ntags: [kafka, devops]\n---\n\n## Symptoms\nConsumer group lag spikes..."
+              "---\ntitle: Kafka Lag Alert Remediation\ndomain: messaging\nrepos:\n  - order-service\ntags: [kafka, devops]\n---\n\n## Symptoms\nConsumer group lag spikes..."
             ]
           },
           "filename": {
@@ -37,26 +37,6 @@
               "mysql-timeout",
               "kafka-lag.md",
               "redis-oom-incident"
-            ]
-          },
-          "repos": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Optional list of associated repository identifiers (e.g. ['order-service', 'payment-service'])",
-            "examples": [
-              [
-                "order-service",
-                "payment-service"
-              ]
-            ]
-          },
-          "repo": {
-            "type": "string",
-            "description": "Optional single repository identifier shortcut or comma-separated list",
-            "examples": [
-              "order-service"
             ]
           }
         }
@@ -88,17 +68,6 @@
               "pending"
             ],
             "description": "Current lifecycle status of the collected document"
-          },
-          "repos": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Associated repository identifiers"
-          },
-          "repo": {
-            "type": "string",
-            "description": "Single or primary associated repository identifier"
           }
         }
       },
@@ -119,7 +88,7 @@
         {
           "title": "Collect structured markdown with existing frontmatter",
           "input": {
-            "content": "---\ntitle: Kubernetes Pod Eviction Troubleshooting\ndomain: infrastructure\ntags:\n  - k8s\n  - memory\n---\n\nWhen disk pressure occurs, inspect ephemeral storage limits.",
+            "content": "---\ntitle: Kubernetes Pod Eviction Troubleshooting\ndomain: infrastructure\nrepos:\n  - order-service\ntags:\n  - k8s\n  - memory\n---\n\nWhen disk pressure occurs, inspect ephemeral storage limits.",
             "filename": "k8s-pod-eviction.md"
           },
           "output": {
@@ -244,10 +213,6 @@
                     "type": "string"
                   },
                   "description": "Associated repository identifiers extracted from frontmatter"
-                },
-                "repo": {
-                  "type": "string",
-                  "description": "Single or primary associated repository identifier"
                 },
                 "createdAt": {
                   "type": "string",

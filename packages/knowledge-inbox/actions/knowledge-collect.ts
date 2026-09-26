@@ -25,8 +25,6 @@ export default defineAction<Input, Output>(async (input, ctx) => {
   ctx.log.info("Starting knowledge.collect", {
     suggestedFilename: input.filename,
     contentLength: input.content ? input.content.length : 0,
-    reposInput: input.repos,
-    repoInput: input.repo,
   });
 
   // 1. Validate content input
@@ -60,10 +58,10 @@ export default defineAction<Input, Output>(async (input, ctx) => {
     }
   }
 
-  // Extract and normalize repos
+  // Extract and normalize repos from markdown frontmatter (with legacy repo fallback)
   const repos = normalizeRepos(
-    input.repos,
-    input.repo,
+    undefined,
+    undefined,
     frontmatterData.repos,
     frontmatterData.repo
   );
@@ -71,12 +69,8 @@ export default defineAction<Input, Output>(async (input, ctx) => {
   // Persist repos into frontmatter
   if (repos.length > 0) {
     frontmatterData.repos = repos;
-    if (repos.length === 1) {
-      frontmatterData.repo = repos[0];
-    } else {
-      delete frontmatterData.repo;
-    }
   }
+  delete frontmatterData.repo;
 
   // Append/override server-managed metadata
   frontmatterData.id = id;
@@ -111,7 +105,6 @@ export default defineAction<Input, Output>(async (input, ctx) => {
     filename: safeFilename,
     path: targetFilePath,
     repos: repos.length > 0 ? repos : undefined,
-    repo: repos.length === 1 ? repos[0] : undefined,
   });
 
   return {
@@ -119,7 +112,5 @@ export default defineAction<Input, Output>(async (input, ctx) => {
     filename: safeFilename,
     path: targetFilePath,
     status: "pending",
-    ...(repos.length > 0 ? { repos } : {}),
-    ...(repos.length === 1 ? { repo: repos[0] } : {}),
   };
 });

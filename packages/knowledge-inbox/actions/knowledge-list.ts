@@ -209,11 +209,6 @@ export default defineAction<Input, Output>(async (input, ctx) => {
         ...(domain ? { domain } : {}),
         ...(tags && tags.length > 0 ? { tags } : {}),
         ...(candidateRepos.length > 0 ? { repos: candidateRepos } : {}),
-        ...(candidateRepos.length === 1
-          ? { repo: candidateRepos[0] }
-          : typeof data.repo === "string" && data.repo.trim()
-            ? { repo: data.repo.trim() }
-            : {}),
         ...(createdAt ? { createdAt } : {}),
         ...(archivedAt ? { archivedAt } : {}),
         ...(resolution ? { resolution } : {}),

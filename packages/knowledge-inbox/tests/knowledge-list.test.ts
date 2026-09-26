@@ -348,16 +348,16 @@ created_at: '2026-09-24T09:00:00.000Z'
       // Multi-repo
       assert.equal(result.items[0].id, "20260924-111111");
       assert.deepEqual(result.items[0].repos, ["order-service", "payment-service"]);
-      assert.equal(result.items[0].repo, undefined);
+      assert.equal((result.items[0] as any).repo, undefined);
 
-      // Single repo
+      // Single repo (extracted from frontmatter repo into repos array)
       assert.equal(result.items[1].id, "20260924-222222");
-      assert.equal(result.items[1].repo, "payment-service");
       assert.deepEqual(result.items[1].repos, ["payment-service"]);
+      assert.equal((result.items[1] as any).repo, undefined);
 
       // Legacy
       assert.equal(result.items[2].id, "20260924-333333");
-      assert.equal(result.items[2].repo, undefined);
+      assert.equal((result.items[2] as any).repo, undefined);
       assert.equal(result.items[2].repos, undefined);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -485,7 +485,8 @@ created_at: '2026-09-24T10:00:00.000Z'
       });
       assert.equal(resSystem.items.length, 1);
       assert.equal(resSystem.items[0].id, "20260924-p1");
-      assert.equal(resSystem.items[0].repo, "system-knowledge");
+      assert.deepEqual(resSystem.items[0].repos, ["system-knowledge"]);
+      assert.equal((resSystem.items[0] as any).repo, undefined);
 
       const resOther = await runtime.run(listAction, {
         status: "processed",
