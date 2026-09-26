@@ -51,7 +51,7 @@ flowchart TD
         C2["内部维护智能体与调度器"]
     end
 
-    subgraph Gateway["ActionDock 单端口网关 (HTTPS 443)"]
+    subgraph Service["ActionDock 服务容器 (HTTPS 443)"]
         Router["Bearer 令牌鉴权与视图路由"]
         V1["查询视图 (sk)<br/>只读检索与候选收集"]
         V2["维护视图 (skm)<br/>全量受控维护工具集"]
