@@ -15,7 +15,11 @@ metadata:
 
 - **核心定位**：本技能是知识中枢自动化维护的主控编排技能，面向云端维护智能体。主控智能体依托特权维护服务统一编排维护闭环，实现纯动作调用与结构化决策，杜绝宿主机容器嵌套执行与无状态脚本拼接。
 - **环境依赖**：执行过程依赖 ActionDock 特权维护服务（服务端口 443，配置标识 `--profile skm`）。所有维护动作（`maintenance/*`）与工作区读写动作（`workspace/*`）统一在此受控环境中执行。
-- **动作契约与模式自省**：所有工具调用统一基于 ActionDock 纯动作协议（`ad run <action> --profile skm`）。若智能体对任何动作的输入参数、可选字段或返回结构存在疑惑，可随时执行 `ad describe <action> --profile skm`（例如 `ad describe maintenance.sync --profile skm` 或 `ad describe workspace/files.edit --profile skm`）进行自省，获取该动作的完整描述、模式定义（`inputSchema` 与 `outputSchema`）以及推荐的扁平传参示例。
+- **远端工具探索与模式自省**：所有工具调用统一基于 ActionDock 纯动作协议（`ad run <action> --profile skm`）。智能体面对远端受控环境时，可通过远端自省与发现工具链完全自主探索和使用远端能力：
+  - 通过 `ad info --profile skm` 查看远端所有挂载的工具包、动作与规程概览。
+  - 通过 `ad list --profile skm` 列出远端所有可用动作清单及其功能描述。
+  - 通过 `ad describe <action> --profile skm`（例如 `ad describe maintenance.sync --profile skm` 或 `ad describe workspace/files.edit --profile skm`）查询具体动作的完整描述、模式定义（`inputSchema` 与 `outputSchema`）以及推荐的扁平传参示例。
+  - 通过 `ad info <package> --profile skm`（例如 `ad info workspace --profile skm`）查看具体工具包内的所有动作与剧本。
 - **协作技能依赖**：在具体文档编写与局部修补环节，主智能体负责调度子智能体，子智能体挂载并遵循 [项目知识库维护技能](../project-knowledge-maintainer/SKILL.md) 深入对应源码执行细粒度核验与文档产出。
 
 ---
@@ -106,8 +110,14 @@ metadata:
   - `workspace/files.edit`：局部受控精准编辑（`ad run workspace/files.edit --profile skm -- path="<path>" targetContent="<old>" replacementContent="<new>"`）
   - `workspace/files.write`：安全新建或覆盖文档（`ad run workspace/files.write --profile skm -- path="<path>" content="<content>"`）
   - `workspace/files.list`：目录层级浏览（`ad run workspace/files.list --profile skm -- path="<dir>" depth:=1`）
+  - `workspace/links.verify`：文档链接有效性校验（`ad run workspace/links.verify --profile skm -- path="<repoPath>"`，检测相对死链、图片缺失与失效标题锚点）
   - `workspace/git.diff` 与 `workspace/git.status`：差异比对与状态自查（`ad run workspace/git.status --profile skm -- path="<repoPath>"` 与 `ad run workspace/git.diff --profile skm -- path="<repoPath>"`）
   - **模式自省**：若对任何动作入参格式存在疑惑，随时执行 `ad describe <action> --profile skm`（例如 `ad describe workspace/files.edit --profile skm`）获取完整模式定义与传参示例。
+- **断链自检与就地修复闭环（核心交付门禁）**：
+  - **严禁直接退出**：子智能体在完成任何文档的新建（`workspace/files.write`）或修改（`workspace/files.edit`）后，严禁直接退出交差。
+  - **主动死链扫描**：必须主动调用 `ad run workspace/links.verify --profile skm -- path="<repoPath>"` 针对目标仓库或修改文档执行死链扫描。
+  - **就地自愈修复**：若校验结果中存在断链（`brokenCount > 0`），子智能体必须根据返回的 `brokenLinks` 清单（包含出错文件、行号、目标路径或缺失锚点），使用 `workspace/files.edit` 立即就地修复相对链接路径、标题锚点或补充缺失文件，再次执行 `links.verify`，直至断链数为零（`brokenCount === 0`）。
+  - **自检结论汇报**：子智能体向主智能体汇报时，必须明确列出断链自检结果（扫描文件数、校验链接数、断链数为 0），未完成自检与自愈闭环的交付视作未达标。
 - **标准子智能体派发提示词模板**：
   主智能体调度子智能体时，必须按下述标准模板组装派发指令：
 
@@ -116,20 +126,22 @@ metadata:
 
   - **目标仓库工作区路径**：`/srv/workspace/<target-repo>`
   - **跨仓探索授权**：所有代码仓与系统知识仓平铺于 `/srv/workspace`。已完全授权你访问上级目录（`..`），必要时可查阅兄弟代码仓源码与 `../system-knowledge`（如数据库映射 `db-map.md`、`ddl/` 快照或跨服务调用契约）。
-  - **环境与特权动作工具**：当前依托 ActionDock 特权受控环境（`--profile skm`）。请使用以下特权动作开展工作（若对入参格式存在疑惑，可随时执行 `ad describe <action> --profile skm` 自省）：
+  - **环境与特权动作工具**：当前依托 ActionDock 特权受控环境（`--profile skm`）。可通过 `ad info --profile skm` 查看所有挂载工具包与能力概览，通过 `ad list --profile skm` 列出所有可用动作。若对任何动作入参格式存在疑惑，可随时执行 `ad describe <action> --profile skm` 自省获取其模式定义与传参示例。常用特权动作包括：
     - 全文检索：`ad run workspace/search.rg --profile skm -- pattern="<keyword>" paths.0="<path>"`
     - 分段直读：`ad run workspace/files.read --profile skm -- path="<path>" startLine:=1 maxLines:=2000`
     - 局部编辑：`ad run workspace/files.edit --profile skm -- path="<path>" targetContent="<old>" replacementContent="<new>"`
     - 安全写入：`ad run workspace/files.write --profile skm -- path="<path>" content="<content>"`
     - 目录浏览：`ad run workspace/files.list --profile skm -- path="<dir>" depth:=1`
+    - 文档链接有效性校验：`ad run workspace/links.verify --profile skm -- path="<repoPath>"`
     - 状态自查与差异比对：`ad run workspace/git.status --profile skm -- path="<repoPath>"` 与 `ad run workspace/git.diff --profile skm -- path="<repoPath>"`
-  - **任务指引与规约**：挂载并严格遵循项目知识库维护技能规范。执行更新门槛与失效四问判定；若需更新或新建，遵守统一目录布局与规范命名。
+  - **任务指引与规约**：挂载并严格遵循项目知识库维护技能规范。执行更新门槛与失效四问判定；若需更新或新建，遵守统一目录布局与规范命名。文档编写与修改完成后，必须自主执行断链自检（`ad run workspace/links.verify --profile skm -- path="<repoPath>"`）；若存在断链（`brokenCount > 0`），结合 `brokenLinks` 使用 `workspace/files.edit` 就地自愈修复，直至断链数清零方可向主智能体汇报。
   - **当前具体核验任务**：
     - <具体说明本次代码变更范围、涉及提交或冷启动建库分类范围>
   - **完成汇报要求**：
     - 任务完成后向主智能体汇报，汇报内容必须包含：
       - 文档判定结论（是否需要更新以及原因说明）
       - 修改或新建的文档清单及简要说明
+      - 断链自检与就地修复结果（扫描文件数、校验链接数、断链数须为 0）
       - 工作区状态审查结果
   ````
 

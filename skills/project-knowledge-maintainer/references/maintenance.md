@@ -89,7 +89,8 @@ flowchart TD
     G --> H{"文档记载是否失效？"}
     H -->|"是"| I["修改知识文档<br>（单仓 docs/knowledge/ 或跨仓 system-knowledge/）"]
     H -->|"否"| J["文档无需变更"]
-    I --> P["maintenance.publish<br>自动提交并直接推送对应分支"]
+    I --> V["links.verify<br>断链自检与 files.edit 就地自愈修复"]
+    V --> P["maintenance.publish<br>自动提交并直接推送对应分支"]
     P --> K["maintenance.complete<br>actionTaken=docs_updated<br>推进 Checkpoint 水位"]
     J --> L["maintenance.complete<br>actionTaken=no_change_needed<br>推进 Checkpoint 水位"]
 ```
@@ -111,6 +112,20 @@ flowchart TD
 - **失效四问**：行为、契约、定位、缺失四维度逐个核验；
 - 若需要更新：在本地工作区修改对应文档；
 - 若无需更新：严禁向知识文档写入“已核对无变化”等账本文案，保持知识文档整洁。
+
+### 断链自检与就地修复门禁
+在任何知识文档修改或新建完成后、提交推送之前，必须严格执行断链自检与就地修复闭环：
+- **执行断链校验**：调用 `workspace/links.verify` 对目标仓库或修改文档执行全量死链扫描：
+  ```bash
+  ad run workspace/links.verify --profile skm -- path="<repoPath>"
+  ```
+- **判定扫描结果**：
+  - 若 `brokenCount === 0`：校验通过，允许进入提交与发布环节。
+  - 若 `brokenCount > 0`：严禁直接提交或放行。分析返回结果中的 `brokenLinks` 清单（包含出错文档路径、行号、问题类型及失效目标）。
+- **就地自愈修复**：
+  - 针对 `TARGET_NOT_FOUND`（目标文件不存在）或 `ANCHOR_NOT_FOUND`（标题锚点失效），使用 `workspace/files.edit` 立即就地修正相对链接路径或更新标题锚点文本。
+  - 若属于引用新建文档尚未落盘，使用 `workspace/files.write` 补齐缺失文档。
+  - 修复后重新运行 `workspace/links.verify`，反复迭代直至 `brokenCount === 0`，确保死链数清零。
 
 ### 提交并推送文档改动（maintenance.publish）
 - 若本次修改了知识文档，调用 `maintenance.publish` 将变动提交并直接推送到远端知识分支：

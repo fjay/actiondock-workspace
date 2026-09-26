@@ -179,9 +179,15 @@ ad run knowledge/knowledge.collect --profile sk --input-file candidate.json
 
 ## Maintainer Agent 自动化维护规程 (Action 驱动)
 
-Maintainer Agent 按预设周期唤起，通过面向维护智能体的受控维护配置（统一端口 443，配置标识 `skm`）驱动维护闭环，全流程统一采用 ActionDock 纯动作规范，彻底摆脱 Docker 嵌套命令与无状态 Shell 脚本。开发者与智能体若对任何动作的输入参数、返回结构或字段含义存疑，可随时使用 `ad describe` 自省查询任意动作工具的模式定义（获取完整描述、`inputSchema` 与 `outputSchema` 及传参示例）：
+Maintainer Agent 按预设周期唤起，通过面向维护智能体的受控维护配置（统一端口 443，配置标识 `skm`）驱动维护闭环，全流程统一采用 ActionDock 纯动作规范，彻底摆脱 Docker 嵌套命令与无状态 Shell 脚本。开发者与智能体面对远端受控环境时，可通过 ActionDock 远端自省与发现工具链完全自主探索和使用远端能力：通过 `ad info` 查看挂载工具包与能力概览，通过 `ad list` 列出所有可用动作，通过 `ad describe` 自省查询任意动作工具的模式定义（获取完整描述、`inputSchema` 与 `outputSchema` 及传参示例）：
 
 ```bash
+# 查看远端所有挂载的工具包、动作与规程概览
+ad info --profile skm
+
+# 列出远端所有可用动作清单及其功能描述
+ad list --profile skm
+
 # 查询动作完整描述、模式定义与传参示例
 ad describe workspace/files.edit --profile skm
 ad describe maintenance/maintenance.sync --profile skm
@@ -189,8 +195,18 @@ ad describe maintenance/maintenance.sync --profile skm
 
 ### 核心动作速查 (面向 `skm` 维护服务)
 
-- **动作模式自省与参数查询**：
+- **远端工具发现与动作模式自省**：
   ```bash
+  # 查看远端所有挂载的工具包、动作与规程概览
+  ad info --profile skm
+
+  # 列出远端所有可用动作清单及其功能描述
+  ad list --profile skm
+
+  # 查看特定工具包内动作详情
+  ad info workspace --profile skm
+
+  # 查询动作完整描述、模式定义与传参示例
   ad describe workspace/files.edit --profile skm
   ad describe maintenance/maintenance.sync --profile skm
   ```

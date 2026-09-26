@@ -17,16 +17,19 @@ metadata:
 
 | 工作模式 | 触发场景 | 核心输入 | 核心动作与工具 | 详细规程 |
 |---|---|---|---|---|
-| **模式一：人工更新与开发后局部同步** | 用户日常要求“同步知识库”、“根据代码改动更新文档”或“补充/修正某业务流程” | 本地工作区变更（`git diff`）与用户指令 | 1. 依靠 Git、搜索与阅读能力核查改动<br>2. 执行【范围门槛】与【失效四问】<br>3. 就地局部同步受影响文档（小改动绝不全仓重建）<br>4. 判定不更新在回复中留痕 | [maintenance.md](references/maintenance.md) |
-| **模式二：消费 Knowledge Inbox 候选池** | 定期审核累积候选，或维护者要求“消费/合并待办知识” | `knowledge.list` 扫描待审候选池 | 1. 读 Candidate 内容并核查源码<br>2. 按 layout 合入正式知识库（严禁 1:1 建文件）<br>3. `knowledge.archive` 归档并打标决议 | [inbox-review.md](references/inbox-review.md) |
-| **模式三：自动化代码变更核验** | 云端定时维护智能体或调度任务触发，或版本发布前核验 | `maintenance.list` commit 差异 | 1. `maintenance.sync` 分支同步与冲突安全回退<br>2. 运行【更新门槛】与【失效四问】<br>3. 更新知识文档（若失效）<br>4. `maintenance.complete` 必须推进 Checkpoint | [maintenance.md](references/maintenance.md) |
-| **模式四：存量全盘建库与初始化** | 仓库首次接入知识库（`initialInventoryRequired: true`）或用户要求全盘重建 | 仓库源码与历史资料 | 1. 广度发现与类别分工（支持子代理委派）<br>2. 六大单数类别目录必须全部补齐实质文档<br>3. 产出根目录 `index.md` 与 `overview.md` | [coverage.md](references/coverage.md)<br>[layout.md](references/layout.md)<br>[quality.md](references/quality.md) |
+| **模式一：人工更新与开发后局部同步** | 用户日常要求“同步知识库”、“根据代码改动更新文档”或“补充/修正某业务流程” | 本地工作区变更（`git diff`）与用户指令 | - 依靠 Git、搜索与阅读能力核查改动<br>- 运行范围门槛与失效四问<br>- 就地局部同步受影响文档（小改动绝不全仓重建）<br>- 运行 links.verify 自检并就地自愈死链<br>- 判定不更新在回复中留痕 | [maintenance.md](references/maintenance.md) |
+| **模式二：消费 Knowledge Inbox 候选池** | 定期审核累积候选，或维护者要求“消费/合并待办知识” | `knowledge.list` 扫描待审候选池 | - 读候选内容并核查源码<br>- 按统一规范合入正式知识库（严禁 1:1 建文件）<br>- 运行 links.verify 自检并修复死链<br>- `knowledge.archive` 归档并打标决议 | [inbox-review.md](references/inbox-review.md) |
+| **模式三：自动化代码变更核验** | 云端定时维护智能体或调度任务触发，或版本发布前核验 | `maintenance.list` commit 差异 | - `maintenance.sync` 分支同步与冲突安全回退<br>- 运行更新门槛与失效四问<br>- 更新知识文档并运行 links.verify 就地修复死链<br>- `maintenance.complete` 必须推进 Checkpoint | [maintenance.md](references/maintenance.md) |
+| **模式四：存量全盘建库与初始化** | 仓库首次接入知识库（`initialInventoryRequired: true`）或用户要求全盘重建 | 仓库源码与历史资料 | - 广度发现与类别分工（支持子代理委派）<br>- 六大单数类别目录必须全部补齐实质文档<br>- 产出根目录 `index.md` 与 `overview.md`<br>- 运行 links.verify 确保全库零死链 | [coverage.md](references/coverage.md)<br>[layout.md](references/layout.md)<br>[quality.md](references/quality.md) |
 
 ---
 
 ## 核心工具箱速查
 
-> 控制项（`--profile skm`、`--json` 等）写在 `--` 之前，`--` 之后为 Action 入参。维护操作一律复用 `--profile skm`。若对任何动作的入参、出参或字段含义存在疑惑，可随时执行 `ad describe <action> --profile skm`（例如 `ad describe workspace/files.edit --profile skm`）自省获取其完整描述、模式定义（`inputSchema` 与 `outputSchema`）及传参示例。
+> 控制项（`--profile skm`、`--json` 等）写在 `--` 之前，`--` 之后为 Action 入参。维护操作一律复用 `--profile skm`。智能体面对远端受控环境时，可通过远端自省与发现工具链完全自主探索和使用远端能力：
+> - 执行 `ad info --profile skm` 可查看远端所有挂载的工具包、动作与规程概览；执行 `ad info <package> --profile skm`（例如 `ad info workspace --profile skm`）可查看特定工具包详情。
+> - 执行 `ad list --profile skm` 可列出远端所有可用动作清单及其功能描述。
+> - 执行 `ad describe <action> --profile skm`（例如 `ad describe workspace/files.edit --profile skm`）可自省获取具体动作的完整描述、模式定义（`inputSchema` 与 `outputSchema`）及传参示例。
 
 ### 工作区读写、编辑与审查工具（`--profile skm`）
 - `search.rg`：全工作区跨仓或单仓代码与知识库正则及字面量检索。
@@ -36,7 +39,7 @@ metadata:
 - `files.delete`：文件与目录安全删除，支持递归控制与工作区根目录防误删。
 - `files.move`：版本感知文件与目录移动，优先通过 Git 保留重命名历史。
 - `files.list`：受控目录层级浏览。
-- `links.verify`：文档链接与引用有效性校验，检测相对路径死链、图片缺失与失效标题锚点。
+- `links.verify`：文档链接与引用有效性校验，检测相对路径死链、图片缺失与失效标题锚点。**核心交付门禁**：在任何模式下完成文档新建（`files.write`）或修改（`files.edit`）后，均须就地运行 `links.verify` 执行死链扫描；若返回存在断链（`brokenCount > 0`），必须结合 `brokenLinks` 清单使用 `files.edit` 立即就地自愈修复，直至断链数为零（`brokenCount === 0`）方可交付或推进流程。
 - `git.status`：工作区状态审查，返回已暂存、未暂存与未跟踪变更。
 - `git.diff`：受控差异核验，受限于最大输出行数与字节预算。
 
