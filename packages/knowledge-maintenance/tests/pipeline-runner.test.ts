@@ -276,6 +276,7 @@ test("Pipeline Runner - 内置单仓维护提示词生成 (buildPrompt)", async 
     assert.ok(prompt.includes("workspace/files.edit"));
     assert.ok(prompt.includes("workspace/files.write"));
     assert.ok(prompt.includes("workspace/files.list"));
+    assert.ok(prompt.includes("workspace/bash.exec"));
   });
 
   await t.test("验证包含断链自检与就地修复门禁铁律", () => {
@@ -283,6 +284,9 @@ test("Pipeline Runner - 内置单仓维护提示词生成 (buildPrompt)", async 
     assert.ok(prompt.includes("brokenCount > 0"));
     assert.ok(prompt.includes("brokenCount === 0"));
     assert.ok(prompt.includes("files.edit"));
+    assert.ok(prompt.includes("git status"));
+    assert.ok(prompt.includes("git diff"));
+    assert.ok(prompt.includes("git restore ."));
   });
 
   await t.test("验证包含最终交付与检查点推进绝对标志", () => {
