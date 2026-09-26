@@ -49,6 +49,9 @@
 
 ```text
 knowledge-server/
+├── bin/
+│   ├── pipeline-runner.mjs     # 开放式本地多仓流水线调度与异步观测驱动器
+│   └── pipeline-runner.d.ts    # 流水线调度驱动器类型定义
 ├── Dockerfile                  # 基于 node:25-bookworm-slim 的一体化容器镜像
 ├── docker-compose.yml          # Docker Compose 编排文件
 ├── entrypoint.sh               # 容器自举入口脚本，负责路由链接与单端口多视图服务启动
@@ -258,15 +261,92 @@ ad describe maintenance/maintenance.sync --profile skm
 
 ### Maintainer Agent 调度与技能配置
 
-云端定时 Maintainer Agent 仅需挂载并激活 [knowledge-maintenance-orchestrator 技能](skills/knowledge-maintenance-orchestrator/SKILL.md)，即可依托特权维护服务（`--profile skm`）自主完成从代码同步、差异扫描、子智能体调度到断链校验、发布推送与检查点推进的完整闭环。
+云端 Maintainer Agent 挂载并激活 [knowledge-maintenance-orchestrator 技能](skills/knowledge-maintenance-orchestrator/SKILL.md)，依托特权维护服务（`--profile skm`）自主完成从单仓代码同步、差异扫描、文档编辑到断链校验、发布推送与检查点推进的完整闭环。
 
 在定时任务或自动化编排平台中，配置极简的生产触发词即可：
 
 ```text
-请激活 【knowledge-maintenance-orchestrator】 技能，针对指定的单一仓库或全量多仓执行一轮知识维护闭环。
+请激活 【knowledge-maintenance-orchestrator】 技能，针对指定的单一仓库执行一轮知识维护闭环。
 ```
 
-完整编排流程、子智能体协作职责与报告规范，请参阅 [知识维护总控编排技能规范](skills/knowledge-maintenance-orchestrator/SKILL.md)。
+完整编排流程、自闭环五步铁律与交付规范，请参阅 [知识维护总控编排技能规范](skills/knowledge-maintenance-orchestrator/SKILL.md)。
+
+---
+
+## 本地多仓流水线调度器（Pipeline Runner）
+
+在大规模多代码仓（例如 90+ 仓库）场景下，为避免主智能体长链路会话上下文膨胀与云端长连接中断风险，本项目提供运行在本地机器上的纯原生驱动脚本 `bin/pipeline-runner.mjs`。将大批量巡检、断点续传与异步观测收敛在本地脚本中，智能体每次唤醒仅聚焦于单仓自闭环，实现调度驱动与执行智能体之间的极致解耦。
+
+### 核心特性
+
+- **纯原生轻量驱动**：基于原生 Node.js 内置模块编写，无需安装任何第三方依赖，零装配成本，开箱即用。
+- **开放式命令模版**：通过 `--dispatch-cmd` 传入任意外部派发命令，模版引擎自动插值填充丰富占位符并提供安全引号转义。
+- **天然单一事实源断点续传**：以云端检查点与 `maintenance.list` 为唯一事实源。已完成的仓库检查点已推进，`hasChanges` 判定为 `false`；中途退出或再次运行自动跳过已完成仓库，无需本地维护任何冗余的状态账本文件，杜绝双事实源与状态漂移。
+- **异步状态侦听与防卡死**：触发外部智能体后，驱动器不阻塞等待长连接，而是以受控间隔定期探测远端目标仓库检查点是否推进至目标提交，同时提供单仓最大等待超时保护。
+- **观测看板与报告输出**：终端实时看板动态展示进度条、总仓数、已完成、已跳过、失败数、当前活跃仓、单仓耗时与总耗时，执行完毕输出规范的 Markdown 结算报告。
+
+### 命令模版占位符一览
+
+在 `--dispatch-cmd` 模版中可使用以下占位符，执行时将根据远端扫描结果自动替换：
+
+- **仓库标识**：`{{repo}}`，对应代码仓名称（例如 `order-service`）。
+- **工作区路径**：`{{path}}`，远端工作区绝对路径（例如 `/srv/workspace/order-service`）。
+- **目标分支**：`{{branch}}`，目标分支名（例如 `release` 或 `master`）。
+- **前置检查点**：`{{from}}`，前置检查点提交哈希（冷启动建库时为 `initial`）。
+- **目标检查点**：`{{to}}`，目标最新提交哈希。
+- **待核验提交数**：`{{commitCount}}`，待核验的新增提交总数。
+- **变动文件总数**：`{{changedFilesCount}}`，变动文件总数。
+- **变动统计摘要**：`{{diffSummary}}`，文件变动统计摘要文本。
+- **提交日志摘要**：`{{commitsSummary}}`，格式化的提交日志摘要文本。
+- **指导语模版**：`{{prompt}}`，开箱即用的专业单仓维护指导语模版。
+
+### 命令行选项参数
+
+- `--profile <name>`：ActionDock 远端客户端配置标识，默认值为 `skm`。
+- `--dispatch-cmd <template>`：用户自定义派发命令模版，支持上述全量占位符（在 `--dry-run` 预演时可选，实际运行时必填）。
+- `--timeout <minutes>`：单仓最大等待检查点推进超时时间（分钟），默认值为 15。
+- `--interval <seconds>`：侦听远端检查点轮询探测间隔（秒），默认值为 10。
+- `--dry-run`：预演模式，仅扫描远端变更并打印各仓库替换后的派发命令，不实际触发派发与轮询。
+- `--only <repos>`：仅处理指定的单个或几个仓库（逗号分隔，例如 `order-service,cron-service`）。
+- `--report-file <path>`：最终 Markdown 结算报告输出路径，默认值为 `maintenance-report.md`。
+- `-h, --help`：打印完整帮助信息与占位符列表。
+
+### 多形态调用范例
+
+- **Action 派发模式**（通过 ActionDock 异步调用维护智能体）：
+  ```bash
+  ./bin/pipeline-runner.mjs \
+    --profile skm \
+    --dispatch-cmd 'ad run my-agent.dispatch --profile skm --async -- repo="{{repo}}" path="{{path}}" prompt="{{prompt}}"'
+  ```
+
+- **HTTP 接口派发模式**（通过 Webhook 触发远程智能体）：
+  ```bash
+  ./bin/pipeline-runner.mjs \
+    --profile skm \
+    --dispatch-cmd 'curl -s -X POST https://agent.internal/api/dispatch -H "Content-Type: application/json" -d "{\"repo\": \"{{repo}}\", \"to\": \"{{to}}\"}"'
+  ```
+
+- **独立 Agent 命令行派发模式**（调用本地智能体命令行工具）：
+  ```bash
+  ./bin/pipeline-runner.mjs \
+    --profile skm \
+    --timeout 20 \
+    --interval 15 \
+    --dispatch-cmd 'lobster run maintainer --repo="{{repo}}" --to="{{to}}" --prompt="{{prompt}}"'
+  ```
+
+- **预演模式**（仅扫描远端变更并预览待派发命令）：
+  ```bash
+  ./bin/pipeline-runner.mjs --dry-run
+  ```
+
+- **单仓或指定仓库定向维护**：
+  ```bash
+  ./bin/pipeline-runner.mjs \
+    --only order-service \
+    --dispatch-cmd 'ad run my-agent.dispatch --profile skm --async -- repo="{{repo}}" prompt="{{prompt}}"'
+  ```
 
 ---
 
