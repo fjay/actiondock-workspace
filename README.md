@@ -54,8 +54,6 @@ knowledge-server/
 ├── entrypoint.sh               # 容器自举入口脚本，负责路由链接与单端口多视图服务启动
 ├── package.json                # Monorepo 根清单，声明 npm workspaces
 ├── .env.example                # 环境变量配置模板
-├── host/
-│   └── knowledge-maintenance   # 宿主机包装脚本，供智能体通过宿主机调度
 ├── config/
 │   └── repos.json.example      # 批量待维护代码仓与系统知识仓清单示例
 ├── skills/                     # 配套知识维护与总控编排智能体技能
@@ -286,28 +284,7 @@ docker compose exec knowledge-server bash
 docker compose restart
 ```
 
-### 宿主机包装脚本调用（通过 knowledge-maintenance）
-
-运维人员登录宿主机时，可通过包装脚本便捷调用容器内动作：
-
-```bash
-# 全量仓库分支同步
-knowledge-maintenance sync
-
-# 单仓定向分支同步
-knowledge-maintenance maintenance.sync -- path=/srv/workspace/order-service
-
-# 批量扫描待维护代码变更
-knowledge-maintenance list
-
-# 单仓扫描代码变更
-knowledge-maintenance maintenance.list -- path=/srv/workspace/order-service
-
-# 单仓文档断链校验
-knowledge-maintenance links.verify -- path=/srv/workspace/order-service
-```
-
-### 远端受控维护调用（通过 ActionDock 客户端）
+### 远端受控维护调用（通过 ActionDock skm 视图）
 
 维护智能体在受信任网络中，通过 ActionDock 客户端直连 443 端口特权维护视图（配置标识 `skm`）执行纯动作维护闭环：
 

@@ -30,8 +30,8 @@
   - 校验目标路径为有效 Git 仓库 (`git rev-parse --is-inside-work-tree`)。
   - 检查工作区干净程度 (`git status --porcelain`)，若存在未提交修改则安全退出并返回 `status: "dirty_worktree"`。
   - 执行 `git fetch origin` 获取最新远端引用。
-  - **单分支/系统知识仓 (`system_knowledge`)**：切换至 `sourceBranch` (默认 `master`)，执行 `git merge --ff-only origin/<sourceBranch>`。
-  - **双分支代码仓 (`code`)**：
+  - **单分支/系统知识仓** (`system_knowledge`)：切换至 `sourceBranch` (默认 `master`)，执行 `git merge --ff-only origin/<sourceBranch>`。
+  - **双分支代码仓** (`code`)：
     - 检查远端是否存在 `knowledgeBranch` (默认 `docs`)。若远端不存在，则以 `origin/<sourceBranch>` 初始化并 `git push origin docs`。
     - 切换至 `knowledgeBranch`，执行合并 `git merge --no-edit origin/<sourceBranch>`。
     - 合并成功后自动执行 `git push origin <knowledgeBranch>`。
@@ -60,19 +60,15 @@
 
 ## 编排执行与定时调度
 
-支持通过 ActionDock 原生动作或宿主机封装脚本执行维护任务：
+支持通过 ActionDock 原生动作执行维护任务：
 
 - 单仓同步：
   ```bash
-  ad run maintenance.sync -- path=/srv/workspace/order-service
+  ad run maintenance.sync --profile skm -- path=/srv/workspace/order-service
   ```
 - 批量同步：
   ```bash
-  ad run maintenance.sync
-  ```
-- 宿主机调用：
-  ```bash
-  knowledge-maintenance sync
+  ad run maintenance.sync --profile skm
   ```
 
 ### JSON 配置文件示例
@@ -95,14 +91,11 @@
 
 ### Cron 定时调度示例
 
-使用 `host/knowledge-maintenance sync` 或 ActionDock 纯动作命令：
+使用 ActionDock 原生动作命令执行定时调度：
 
 ```crontab
-# 每天凌晨 2 点通过宿主机封装脚本执行知识库自动维护
-0 2 * * * /root/code/knowledge-server/host/knowledge-maintenance sync >> /var/log/actiondock-maintenance.log 2>&1
-
-# 或直接通过 ActionDock 纯动作命令执行批量同步
-0 2 * * * ad run maintenance.sync >> /var/log/actiondock-maintenance.log 2>&1
+# 每天凌晨 2 点通过 ActionDock 执行知识库批量同步维护
+0 2 * * * ad run maintenance.sync --profile skm >> /var/log/actiondock-maintenance.log 2>&1
 ```
 
 ---
@@ -111,7 +104,7 @@
 
 针对拥有海量历史与大文件的仓库群，本包默认启用 Blobless 模式（`--filter=blob:none`）：
 
-- **为什么不使用浅克隆（`--depth`）？**
+- **为什么不使用浅克隆**（`--depth`）？
   - 浅克隆会切断提交历史，导致 `release -> docs` 跨分支合并时找不到共同祖先（`merge-base` 缺失报错：`fatal: refusing to merge unrelated histories`）；
   - 也会导致 `maintenance.list` 在比对旧 Checkpoint 时因缺少历史对象而无法生成差异。
 - **Blobless 模式优势**：
