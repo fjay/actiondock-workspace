@@ -29,11 +29,8 @@ export const WorkspaceErrorCode = {
   INVALID_ARGUMENT: "INVALID_ARGUMENT",
   UNSUPPORTED_BINARY_FILE: "UNSUPPORTED_BINARY_FILE",
   UNSUPPORTED_TEXT_ENCODING: "UNSUPPORTED_TEXT_ENCODING",
-  CANNOT_DELETE_ROOT: "CANNOT_DELETE_ROOT",
-  GIT_ERROR: "GIT_ERROR",
   SEARCH_FAILED: "SEARCH_FAILED",
 } as const;
 
 export type WorkspaceErrorCode =
   (typeof WorkspaceErrorCode)[keyof typeof WorkspaceErrorCode];
-

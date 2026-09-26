@@ -36,8 +36,6 @@ metadata:
 - `files.read`：文本分段直读文档或源码，首行附带起止行元数据。
 - `files.write`：文本安全写入，自动创建缺失父目录，支持覆盖控制。
 - `files.edit`：局部受控精准编辑，支持起止行范围限定与多重匹配防冲突保护。
-- `files.delete`：文件与目录安全删除，支持递归控制与工作区根目录防误删。
-- `files.move`：版本感知文件与目录移动，优先通过 Git 保留重命名历史。
 - `files.list`：受控目录层级浏览。
 - `links.verify`：文档链接与引用有效性校验，检测相对路径死链、图片缺失与失效标题锚点。**核心交付门禁**：在任何模式下完成文档新建（`files.write`）或修改（`files.edit`）后，均须就地运行 `links.verify` 执行死链扫描；若返回存在断链（`brokenCount > 0`），必须结合 `brokenLinks` 清单使用 `files.edit` 立即就地自愈修复，直至断链数为零（`brokenCount === 0`）方可交付或推进流程。
 - `bash.exec`：终端命令直接执行，用于执行版本状态查看、差异核验、改动回滚与测试验证（如 `git status`、`git diff`、`git restore .`、`npm test`）。
