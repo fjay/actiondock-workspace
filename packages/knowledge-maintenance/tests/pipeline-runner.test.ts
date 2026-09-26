@@ -199,6 +199,121 @@ test("Pipeline Runner - 模版占位符填充与转义", async (t) => {
   });
 });
 
+test("Pipeline Runner - 内置单仓维护提示词生成 (buildPrompt)", async (t) => {
+  const promptData = {
+    repo: "order-service",
+    path: "/srv/workspace/order-service",
+    branch: "release",
+    from: "1111111111111111111111111111111111111111",
+    to: "2222222222222222222222222222222222222222",
+    commitCount: 2,
+    changedFilesCount: 3,
+    commitsSummary: '2222222 fix: handle "null" error\n3333333 feat: add payment retry',
+    diffSummary: "3 files changed, 25 insertions(+), 5 deletions(-)",
+  };
+
+  const prompt = buildPrompt(promptData);
+
+  await t.test("验证任务背景与基线包含仓库、路径、分支、检查点与变更统计", () => {
+    assert.ok(prompt.includes("order-service"));
+    assert.ok(prompt.includes("/srv/workspace/order-service"));
+    assert.ok(prompt.includes("release"));
+    assert.ok(prompt.includes("1111111111111111111111111111111111111111"));
+    assert.ok(prompt.includes("2222222222222222222222222222222222222222"));
+    assert.ok(prompt.includes('2222222 fix: handle "null" error'));
+    assert.ok(prompt.includes("3 files changed, 25 insertions(+), 5 deletions(-)"));
+    assert.ok(prompt.includes("新增提交共 2 个，涉及 3 个文件变动"));
+  });
+
+  await t.test("验证包含编排技能规范引用", () => {
+    assert.ok(prompt.includes("skills/knowledge-maintenance-orchestrator/SKILL.md"));
+    assert.ok(prompt.includes("skills/project-knowledge-maintainer"));
+  });
+
+  await t.test("验证包含六大分类落盘规范、命名公式与根目录导航", () => {
+    assert.ok(prompt.includes("/srv/workspace/order-service/docs/knowledge/<category>/"));
+    assert.ok(prompt.includes("<category>-<topic>.md"));
+    assert.ok(prompt.includes("index.md"));
+    assert.ok(prompt.includes("overview.md"));
+    assert.ok(prompt.includes("flow 类别"));
+    assert.ok(prompt.includes("interface 类别"));
+    assert.ok(prompt.includes("rule 类别"));
+    assert.ok(prompt.includes("module 类别"));
+    assert.ok(prompt.includes("data 类别"));
+    assert.ok(prompt.includes("runbook 类别"));
+  });
+
+  await t.test("验证包含 data 类别红线约束", () => {
+    assert.ok(prompt.includes("/srv/workspace/system-knowledge"));
+    assert.ok(prompt.includes("db-map.md"));
+    assert.ok(prompt.includes("ddl/data-ddl-{schema}.md"));
+    assert.ok(prompt.includes("data/data-databases.md"));
+    assert.ok(prompt.includes("严禁在代码仓自身文档中复制粘贴表结构或建表脚本"));
+  });
+
+  await t.test("验证包含工作区拓扑与绝对路径清单", () => {
+    assert.ok(prompt.includes("目标仓库：/srv/workspace/order-service"));
+    assert.ok(prompt.includes("兄弟代码仓：/srv/workspace/<sibling-repo>"));
+    assert.ok(prompt.includes("系统知识仓：/srv/workspace/system-knowledge"));
+    assert.ok(prompt.includes("动作参数统一使用绝对路径"));
+  });
+
+  await t.test("验证包含更新门槛与失效四问判定", () => {
+    assert.ok(prompt.includes("业务含义变了吗？"));
+    assert.ok(prompt.includes("接口契约变了吗？"));
+    assert.ok(prompt.includes("流程分支变了吗？"));
+    assert.ok(prompt.includes("运维排障变了吗？"));
+    assert.ok(prompt.includes("no_change_needed"));
+  });
+
+  await t.test("验证包含特权环境与工具自省速查", () => {
+    assert.ok(prompt.includes("--profile skm"));
+    assert.ok(prompt.includes("ad info"));
+    assert.ok(prompt.includes("ad list"));
+    assert.ok(prompt.includes("ad describe"));
+    assert.ok(prompt.includes("workspace/search.rg"));
+    assert.ok(prompt.includes("workspace/files.read"));
+    assert.ok(prompt.includes("workspace/files.edit"));
+    assert.ok(prompt.includes("workspace/files.write"));
+    assert.ok(prompt.includes("workspace/files.list"));
+  });
+
+  await t.test("验证包含断链自检与就地修复门禁铁律", () => {
+    assert.ok(prompt.includes("workspace/links.verify"));
+    assert.ok(prompt.includes("brokenCount > 0"));
+    assert.ok(prompt.includes("brokenCount === 0"));
+    assert.ok(prompt.includes("files.edit"));
+  });
+
+  await t.test("验证包含最终交付与检查点推进绝对标志", () => {
+    assert.ok(prompt.includes("maintenance/maintenance.publish"));
+    assert.ok(prompt.includes("maintenance/maintenance.complete"));
+    assert.ok(prompt.includes("docs_updated"));
+    assert.ok(prompt.includes("no_change_needed"));
+  });
+
+  await t.test("验证缺省入参时的稳健兜底", () => {
+    const minimalPrompt = buildPrompt({});
+    assert.ok(minimalPrompt.includes("目标仓库："));
+    assert.ok(minimalPrompt.includes("工作区绝对路径：/srv/workspace"));
+    assert.ok(minimalPrompt.includes("目标分支：master"));
+    assert.ok(minimalPrompt.includes("前置检查点：initial"));
+    assert.ok(minimalPrompt.includes("无新增提交"));
+    assert.ok(minimalPrompt.includes("无文件变动"));
+    assert.ok(minimalPrompt.includes("links.verify"));
+    assert.ok(minimalPrompt.includes("maintenance.complete"));
+  });
+
+  await t.test("验证提示词遵循 AGENTS.md 规范（无数字序号列表、无表情符号、无粗体嵌套行内代码）", () => {
+    // 严禁包含数字列表（1. 2. 3. 等）
+    assert.ok(!/^\s*\d+\.\s/m.test(prompt));
+    // 严禁包含表情符号
+    assert.ok(!/[\u{1F300}-\u{1F9FF}]/u.test(prompt));
+    // 严禁粗体嵌套行内代码（如 **`...`**）
+    assert.ok(!/\*\*[^*]*`[^*]*\*\*/.test(prompt));
+  });
+});
+
 test("Pipeline Runner - 单仓检查点推进判定", async (t) => {
   const targetCommit = "2222222222222222222222222222222222222222";
 
