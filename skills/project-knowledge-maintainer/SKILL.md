@@ -54,7 +54,7 @@ metadata:
 - `files.edit`：局部受控精准编辑，支持起止行范围限定与多重匹配防冲突保护。
 - `files.list`：受控目录层级浏览。
 - `links.verify`：文档链接与引用有效性校验，检测相对路径死链、图片缺失与失效标题锚点。**核心交付门禁**：在任何模式下完成文档新建（`files.write`）或修改（`files.edit`）后，均须就地运行 `links.verify` 执行死链扫描；若返回存在断链（`brokenCount > 0`），必须结合 `brokenLinks` 清单使用 `files.edit` 立即就地自愈修复，直至断链数为零（`brokenCount === 0`）方可交付或推进流程。
-- `bash.exec`：终端命令直接执行，用于执行版本状态查看、差异核验、改动回滚与测试验证（如 `git status`、`git diff`、`git restore .`、`npm test`）。
+- `bash.exec`：终端命令直接执行，用于执行版本状态查看、差异核验、改动回滚与测试验证（如 `git status`、`git diff`、`git restore .`、`npm test`）。执行输出直接映射为 `content` 原生终端输出流，退出码独立输出至 stderr。
 
 ### 终端执行与改动回滚工具（`--profile skm`）
 - **查看状态、比对差异与变更回滚**：

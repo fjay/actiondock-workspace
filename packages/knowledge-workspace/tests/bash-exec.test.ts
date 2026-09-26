@@ -22,7 +22,7 @@ function createRuntime(tmpDir: string) {
 }
 
 describe("workspace/bash.exec", () => {
-  it("executes a basic command and captures stdout", async () => {
+  it("executes a basic command and captures content", async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ws-bash-"));
     try {
       const runtime = createRuntime(tmpDir);
@@ -31,14 +31,14 @@ describe("workspace/bash.exec", () => {
       });
 
       assert.equal(res.exitCode, 0);
-      assert.match(res.stdout, /hello from bash/);
-      assert.equal(res.stderr, "");
+      assert.match(res.content, /hello from bash/);
+      assert.equal(res.truncated, false);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
-  it("handles non-zero exit code and captures stderr", async () => {
+  it("handles non-zero exit code and captures error content", async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ws-bash-"));
     try {
       const runtime = createRuntime(tmpDir);
@@ -47,7 +47,7 @@ describe("workspace/bash.exec", () => {
       });
 
       assert.notEqual(res.exitCode, 0);
-      assert.match(res.stderr, /No such file or directory/i);
+      assert.match(res.content, /No such file or directory/i);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -66,7 +66,7 @@ describe("workspace/bash.exec", () => {
 
       assert.equal(res.exitCode, 0);
       // Resolves to nested-sub directory
-      assert.match(res.stdout, /nested-sub/);
+      assert.match(res.content, /nested-sub/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -93,14 +93,14 @@ describe("workspace/bash.exec", () => {
         command: "git status --porcelain",
       });
       assert.equal(statusRes.exitCode, 0);
-      assert.match(statusRes.stdout, /M sample\.txt/);
+      assert.match(statusRes.content, /M sample\.txt/);
 
       // 2. git diff
       const diffRes = await runtime.run(bashExecAction, {
         command: "git diff",
       });
       assert.equal(diffRes.exitCode, 0);
-      assert.match(diffRes.stdout, /modified content/);
+      assert.match(diffRes.content, /modified content/);
 
       // 3. git restore
       const restoreRes = await runtime.run(bashExecAction, {
@@ -127,5 +127,21 @@ describe("workspace/bash.exec", () => {
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+
+  it("outputs unboxed raw content to stdout and exitCode to stderr via ad CLI", () => {
+    const projectRoot = path.resolve(import.meta.dirname, "..");
+    const res = execSync(
+      "ad run bash.exec -- command=\"echo 'raw terminal stream'\"",
+      {
+        cwd: projectRoot,
+        encoding: "utf8",
+      }
+    );
+
+    // stdout must contain the raw string with real newline, without JSON escaping
+    assert.match(res, /raw terminal stream/);
+    assert.ok(!res.includes("\"exitCode\""));
+    assert.ok(!res.includes("\"content\""));
   });
 });

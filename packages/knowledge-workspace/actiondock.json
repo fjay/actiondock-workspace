@@ -576,19 +576,18 @@
             ],
             "description": "Process exit code (0 indicates success)"
           },
-          "stdout": {
+          "content": {
             "type": "string",
-            "description": "Standard output text of the command"
+            "description": "Raw terminal output text of the command"
           },
-          "stderr": {
-            "type": "string",
-            "description": "Standard error text of the command"
+          "truncated": {
+            "type": "boolean",
+            "description": "Whether output was truncated due to buffer limit"
           }
         },
         "required": [
           "exitCode",
-          "stdout",
-          "stderr"
+          "content"
         ]
       }
     },

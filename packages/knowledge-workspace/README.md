@@ -29,7 +29,7 @@
   - 特性：基于目标文本块精准匹配替换，支持行号区间收敛搜索，多重匹配冲突保护与编码一致性保障。
 - **命令直接执行**：`bash.exec`（完全限定标识：`workspace/bash.exec`）
   - 核心参数：`command`、`cwd`、`timeoutMs`。
-  - 特性：在工作区内直接执行原生终端与版本管理命令（如 `git status`、`git diff`、`git restore`、`npm test`），自动捕获退出码、标准输出与标准错误。
+  - 特性：在工作区内直接执行原生终端与版本管理命令（如 `git status`、`git diff`、`git restore .`、`npm test`），执行结果直接映射为 `content` 原生终端输出流，退出码独立输出至 stderr，兼顾原生体验与自动化消费。
 - **链接引用校验**：`links.verify`（完全限定标识：`workspace/links.verify`）
   - 核心参数：`path`、`checkAnchors`、`ignoreDirs`。
   - 特性：零外部依赖确定性扫描 Markdown 相对文件与文档内标题锚点，过滤网络链接并精确定位失效链接位置与原因。

@@ -124,7 +124,7 @@ ad describe maintenance/maintenance.sync --profile skm
 
 ### 变更审查与回滚：`workspace/bash.exec`
 
-- **用途**：执行版本状态查看、差异核验与改动回滚，确保只改动文档目录，未误动业务代码。
+- **用途**：执行版本状态查看、差异核验与改动回滚，确保只改动文档目录，未误动业务代码。执行输出直接映射为 `content` 原生终端输出流，退出码独立输出至 stderr。
 - **范例**：
   ```bash
   # 查看当前工作区变更状态

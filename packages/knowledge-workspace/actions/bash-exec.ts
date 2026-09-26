@@ -66,12 +66,11 @@ export default defineAction<Input, Output>(async (input, ctx) => {
     { signal: ctx.signal }
   );
 
-  const stdout = decodeText(res.chunks.filter((c) => c.stream === "stdout"));
-  const stderr = decodeText(res.chunks.filter((c) => c.stream === "stderr"));
+  const content = decodeText(res.chunks);
 
   return {
     exitCode: res.exit.code,
-    stdout,
-    stderr,
+    content,
+    truncated: res.truncated,
   };
 });
