@@ -20,7 +20,7 @@ metadata:
 | **模式一：人工更新与开发后局部同步** | 用户日常要求“同步知识库”、“根据代码改动更新文档”或“补充/修正某业务流程” | 本地工作区变更（`git diff`）与用户指令 | - 依靠 Git、搜索与阅读能力核查改动<br>- 运行范围门槛与失效四问<br>- 就地局部同步受影响文档（小改动绝不全仓重建）<br>- 运行 links.verify 自检并就地自愈死链<br>- 判定不更新在回复中留痕 | [maintenance.md](references/maintenance.md) |
 | **模式二：消费 Knowledge Inbox 候选池** | 定期审核累积候选，或维护者要求“消费/合并待办知识” | `knowledge.list` 扫描待审候选池 | - 读候选内容并核查源码<br>- 按统一规范合入正式知识库（严禁 1:1 建文件）<br>- 运行 links.verify 自检并修复死链<br>- `knowledge.archive` 归档并打标决议 | [inbox-review.md](references/inbox-review.md) |
 | **模式三：自动化代码变更核验** | 云端定时维护智能体或调度任务触发，或版本发布前核验 | `maintenance.list` commit 差异 | - `maintenance.sync` 分支同步与冲突安全回退<br>- 运行更新门槛与失效四问<br>- 更新知识文档并运行 links.verify 就地修复死链<br>- `maintenance.complete` 必须推进 Checkpoint | [maintenance.md](references/maintenance.md) |
-| **模式四：存量全盘建库与初始化** | 仓库首次接入知识库（`initialInventoryRequired: true`）或用户要求全盘重建 | 仓库源码与历史资料 | - 广度发现与类别分工（支持子代理委派）<br>- 六大单数类别目录必须全部补齐实质文档<br>- 产出根目录 `index.md` 与 `overview.md`<br>- 运行 links.verify 确保全库零死链 | [coverage.md](references/coverage.md)<br>[layout.md](references/layout.md)<br>[quality.md](references/quality.md) |
+| **模式四：存量全盘建库与初始化** | 仓库首次接入知识库（`initialInventoryRequired: true`）或用户要求全盘重建 | 仓库源码与历史资料 | - 广度发现与类别分工（支持子代理委派）<br>- 系统知识库遵循三步法建立业务领域映射<br>- 六大单数类别目录必须全部补齐实质文档<br>- 产出根目录 `index.md` 与 `overview.md`<br>- 运行 links.verify 确保全库零死链 | [coverage.md](references/coverage.md)<br>[layout.md](references/layout.md)<br>[cross-repository.md](references/cross-repository.md)<br>[quality.md](references/quality.md) |
 
 ---
 
@@ -84,9 +84,9 @@ metadata:
 - 模式一（人工更新与开发后局部同步）：读 [maintenance.md](references/maintenance.md) 的“更新门槛”与“开发后的局部同步”。按范围门槛与失效四问精准核对，小修改不扩展为全仓重建。
 - 模式二（审核消费 Inbox 候选）：读 [inbox-review.md](references/inbox-review.md)。逐篇查源码消歧、去重与合入，调用 `knowledge.archive` 归档。
 - 模式三（自动化代码维护或定时核验）：读 [maintenance.md](references/maintenance.md) 的“自动化定时维护与 Checkpoint 推进”。严守更新门槛与失效四问，推进 Checkpoint。
-- 模式四（新建、重建或补查遗漏）：读 [coverage.md](references/coverage.md) 与 [layout.md](references/layout.md)。先广度发现，再按类别分工深入，最后反向补漏；产出按统一布局落位。
+- 模式四（新建、重建或补查遗漏）：读 [coverage.md](references/coverage.md) 与 [layout.md](references/layout.md)。先广度发现，再按类别分工深入，最后反向补漏；系统知识库建库时按 [cross-repository.md](references/cross-repository.md) 遵循业务领域识别与仓库归属三步法建立映射；产出按统一布局落位。
 - 初次写文档或元数据：读 [metadata.md](references/metadata.md)，再按需读下表模板。
-- 跨仓关系：另读 [cross-repository.md](references/cross-repository.md)，明确仓库标识、工作区拓扑、绝对路径跨仓探索与证据边界。
+- 跨仓关系与系统知识库：另读 [cross-repository.md](references/cross-repository.md)，掌握业务领域识别与仓库归属三步法、工作区拓扑、绝对路径跨仓探索与证据边界。
 - 内容复查与导航验收：读 [quality.md](references/quality.md)。只读审查不改文档或更新检查位置。
 
 ---
@@ -111,7 +111,7 @@ docs/knowledge/
 - 文件名一律 `{kind}-{topic}.md`，kind 前缀不可省略；topic 用小写英文与连字符的稳定业务术语。
 - `index.md` 与 `overview.md` 固定在知识根目录，各只有一份，不建 `overview/` 目录。
 - 生产库 DDL 统一存系统层：根目录 `db-map.md` 登记生产/测试库名、业务领域、域名与 DDL 快照映射，每库一篇脚本导出的 `ddl/data-ddl-{schema}.md`（含唯一可编辑的「字段语义补丁」节，重导自动保留，导出与补丁规则见 layout.md「DDL 与多生产库」）；仓库层只用 `data/data-databases.md` 引用，禁止 `database-schema.md`、`tables.md` 等通用名。
-- 系统层跨项目知识库为每个业务领域建一个目录，领域内部结构与仓库层完全同构。
+- 系统层跨项目知识库为每个业务领域建一个目录，领域内部结构与仓库层完全同构。系统知识库建库时需遵循业务领域识别与仓库归属三步法（优先索引文档、常识预判并深入仓内印证核验、系统层固化对照表与跨仓聚合），在根目录 `index.md` 维护业务领域清单与代码仓归属对照表，在对应领域目录下聚合端到端跨仓流程文档（`flow/`）并汇总数据库映射至根目录 `db-map.md`，详见 [cross-repository.md](references/cross-repository.md)。
 
 ---
 
