@@ -2,7 +2,7 @@
 
 [ActionDock](https://github.com/team4u/actiondock) 云主机一体化知识服务容器。
 
-本工程负责在云主机上以 Docker 容器化运行知识中枢，采用 ActionDock 原生单端口多视图（Virtual Views）架构：统一在单一原生 HTTPS（端口 443）上运行，通过请求中的 Bearer Token 自动匹配与隔离面向外部查询用户的只读白名单视图（sk）与面向内部维护智能体的全量特权视图（skm），实现细粒度安全隔离与自动化闭环演进。
+本工程负责在云主机上以 Docker 容器化运行知识中枢，采用 ActionDock 原生单端口多视图（Virtual Views）架构：统一在单一原生 HTTPS（端口 443）上运行，通过请求中的 Bearer Token 自动匹配与隔离面向外部查询用户的只读检索与受控追加视图（sk）与面向内部维护智能体的全量特权视图（skm），实现细粒度安全隔离与自动化闭环演进。
 
 > **深入理解架构**：系统核心设计哲学、单端口多视图架构与闭环演进，请参阅 [知识中枢设计理念与核心架构演进](docs/design.md)。
 
@@ -24,7 +24,7 @@
   │                                 │                              │                         │
   │                                 ▼                              ▼                         │
   │                 ┌──────────────────────────────┐ ┌──────────────────────────────┐        │
-  │                 │ sk 虚拟视图 (白名单只读)      │ │ skm 虚拟视图 (特权受控维护)  │        │
+  │                 │ sk 虚拟视图 (只读检索与追加)  │ │ skm 虚拟视图 (特权受控维护)  │        │
   │                 │ -A search.rg, files.read,    │ │ -P workspace,                │        │
   │                 │    files.list,               │ │    knowledge,                │        │
   │                 │    knowledge.collect         │ │    maintenance               │        │
@@ -92,11 +92,11 @@ cp .env.example .env
 ```
 根据云主机实际情况编辑 `.env`：
 ```dotenv
-# 查询服务鉴权令牌 (面向外部查询用户与排障智能体，由 443 端口虚拟视图自动路由至 sk 只读白名单视图)
-ACTIONDOCK_TOKEN=your-random-secure-sk-token-here
+# 查询服务鉴权令牌 (面向外部查询用户与排障智能体，由 443 端口虚拟视图自动路由至 sk 只读检索与受控追加视图)
+ACTIONDOCK_TOKEN=ad_query_token_9f83b2a7c41d6e05b382f14e7a9c02d5
 
 # 智能体受控维护服务鉴权令牌 (面向内部维护智能体，由 443 端口虚拟视图自动路由至 skm 全量特权视图)
-ACTIONDOCK_AGENT_TOKEN=your-random-secure-agent-token-here
+ACTIONDOCK_AGENT_TOKEN=ad_maintainer_token_8a12d4e7f93c01b2a5d6e8f4c71a3b5e
 
 # 服务外部暴露端口 (原生 HTTPS 单端口多视图模式，默认 443，通过不同 Bearer Token 自动由虚拟视图路由权限)
 PORT=443

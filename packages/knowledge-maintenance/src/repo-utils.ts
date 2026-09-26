@@ -37,6 +37,15 @@ export function resolveRepoPath(
     throw new MaintenanceError("Path parameter is required", "INVALID_PATH", 400);
   }
   const resolved = path.resolve(rawPath);
+  const rawWsRoot =
+    (process.env.WORKSPACE_ROOT && process.env.WORKSPACE_ROOT.trim()) ||
+    (fs.existsSync("/srv/workspace") ? "/srv/workspace" : undefined);
+  if (rawWsRoot) {
+    const wsRoot = path.resolve(rawWsRoot);
+    if (resolved !== wsRoot && !resolved.startsWith(wsRoot + path.sep)) {
+      throw new MaintenanceError(`Path is outside workspace root: ${resolved}`, "PATH_FORBIDDEN", 403);
+    }
+  }
   if (!fs.existsSync(resolved)) {
     if (options?.allowNonExistent) {
       return resolved;

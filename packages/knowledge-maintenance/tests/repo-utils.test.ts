@@ -107,6 +107,43 @@ describe("repo-utils", () => {
         fs.rmSync(tmpFile, { force: true });
       }
     });
+
+    it("enforces workspace sandbox isolation when WORKSPACE_ROOT is configured", () => {
+      const tmpWs = fs.mkdtempSync(path.join(os.tmpdir(), "util-sandbox-ws-"));
+      const repoInside = path.join(tmpWs, "inside-repo");
+      fs.mkdirSync(repoInside, { recursive: true });
+      const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "util-sandbox-out-"));
+
+      const prevWs = process.env.WORKSPACE_ROOT;
+      process.env.WORKSPACE_ROOT = tmpWs;
+
+      try {
+        // Path inside workspace root resolves successfully
+        const resolved = resolveRepoPath(repoInside);
+        assert.equal(resolved, path.resolve(repoInside));
+
+        // Path outside workspace root throws PATH_FORBIDDEN (403)
+        assert.throws(
+          () => resolveRepoPath(outsideDir),
+          (err: any) => err.code === "PATH_FORBIDDEN" && err.status === 403
+        );
+
+        // Path traversal escaping workspace root throws PATH_FORBIDDEN (403)
+        const traversalPath = path.join(repoInside, "..", "..", "etc");
+        assert.throws(
+          () => resolveRepoPath(traversalPath),
+          (err: any) => err.code === "PATH_FORBIDDEN" && err.status === 403
+        );
+      } finally {
+        if (prevWs !== undefined) {
+          process.env.WORKSPACE_ROOT = prevWs;
+        } else {
+          delete process.env.WORKSPACE_ROOT;
+        }
+        fs.rmSync(tmpWs, { recursive: true, force: true });
+        fs.rmSync(outsideDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe("ensureReposConfigFile", () => {

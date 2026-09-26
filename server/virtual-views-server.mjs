@@ -13,7 +13,18 @@ const INTERNAL_HOST = "127.0.0.1";
 const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || "/srv/workspace";
 const KNOWLEDGE_INBOX_ROOT = process.env.KNOWLEDGE_INBOX_ROOT || "/srv/knowledge-inbox";
 
-// 白名单动作定义
+// 启动强约束安全防御检查
+if (!SK_TOKEN || SK_TOKEN.length < 32) {
+  throw new Error("ACTIONDOCK_TOKEN is required and must be at least 32 characters long");
+}
+if (!AGENT_TOKEN || AGENT_TOKEN.length < 32) {
+  throw new Error("ACTIONDOCK_AGENT_TOKEN is required and must be at least 32 characters long");
+}
+if (SK_TOKEN === AGENT_TOKEN) {
+  throw new Error("ACTIONDOCK_TOKEN and ACTIONDOCK_AGENT_TOKEN must not be identical");
+}
+
+// 白名单动作与受控包定义
 const SK_ALLOWLIST = new Set([
   "search.rg",
   "files.read",
@@ -27,7 +38,30 @@ const SK_ALLOWLIST = new Set([
 
 const SKM_PACKAGE_ALLOWLIST = new Set(["workspace", "knowledge", "maintenance"]);
 
-// 2. 启动底层 ActionDock 守护进程 (清除 Token 环境变量，由网关统一进行虚拟视图鉴权)
+const ACTION_PACKAGE_MAP = {
+  // workspace
+  "search.rg": "workspace",
+  "files.read": "workspace",
+  "files.list": "workspace",
+  "files.write": "workspace",
+  "files.edit": "workspace",
+  "files.delete": "workspace",
+  "files.move": "workspace",
+  "git.status": "workspace",
+  "git.diff": "workspace",
+  "links.verify": "workspace",
+  // knowledge
+  "knowledge.collect": "knowledge",
+  "knowledge.list": "knowledge",
+  "knowledge.archive": "knowledge",
+  // maintenance
+  "maintenance.sync": "maintenance",
+  "maintenance.list": "maintenance",
+  "maintenance.publish": "maintenance",
+  "maintenance.complete": "maintenance",
+};
+
+// 2. 启动底层 ActionDock 守护进程 (清除 Token 环境变量，由网关统一进行虚拟视图鉴权，彻底移除 --management)
 const backendEnv = { ...process.env };
 delete backendEnv.ACTIONDOCK_TOKEN;
 delete backendEnv.ACTIONDOCK_AGENT_TOKEN;
@@ -35,7 +69,7 @@ delete backendEnv.ACTIONDOCK_AGENT_TOKEN;
 console.log("[INFO] Starting internal ActionDock backend service on port " + INTERNAL_PORT + "...");
 const backend = spawn(
   "ad",
-  ["serve", "-p", String(INTERNAL_PORT), "-H", INTERNAL_HOST, "--allow-insecure-no-auth", "--management"],
+  ["serve", "-p", String(INTERNAL_PORT), "-H", INTERNAL_HOST, "--allow-insecure-no-auth"],
   {
     stdio: "inherit",
     env: backendEnv,
@@ -107,31 +141,78 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
 
 // 4. 请求解析辅助函数
 function parseActionTarget(pathname) {
-  const normalized = pathname.replace(/^\/api\/v2/, "");
-  // 匹配 /packages/:pkg/actions/:action/...
-  const pkgMatch = normalized.match(/^\/packages\/([^/]+)\/actions\/([^/]+)(?:\/(?:run|start))?$/);
-  if (pkgMatch) {
+  const normalized = pathname.replace(/^\/api\/v2/, "").replace(/\/+$/, "");
+  // 1. /packages/:pkg/actions/:action/(run|start)
+  const pkgRunMatch = normalized.match(/^\/packages\/([^/]+)\/actions\/([^/]+)\/(run|start)$/);
+  if (pkgRunMatch) {
+    const pkg = decodeURIComponent(pkgRunMatch[1]);
+    const act = decodeURIComponent(pkgRunMatch[2]);
     return {
-      packageId: decodeURIComponent(pkgMatch[1]),
-      actionId: decodeURIComponent(pkgMatch[2]),
-      fullAction: `${decodeURIComponent(pkgMatch[1])}/${decodeURIComponent(pkgMatch[2])}`,
+      packageId: pkg,
+      actionId: act,
+      fullAction: `${pkg}/${act}`,
+      operation: pkgRunMatch[3],
     };
   }
-  // 匹配 /actions/:action/...
-  const actMatch = normalized.match(/^\/actions\/([^/]+)(?:\/(?:run|start))?$/);
-  if (actMatch) {
-    const rawAction = decodeURIComponent(actMatch[1]);
+  // 2. /packages/:pkg/actions/:action
+  const pkgMatch = normalized.match(/^\/packages\/([^/]+)\/actions\/([^/]+)$/);
+  if (pkgMatch) {
+    const pkg = decodeURIComponent(pkgMatch[1]);
+    const act = decodeURIComponent(pkgMatch[2]);
+    return {
+      packageId: pkg,
+      actionId: act,
+      fullAction: `${pkg}/${act}`,
+      operation: "describe",
+    };
+  }
+  // 3. /actions/:id/(run|start)
+  const actRunMatch = normalized.match(/^\/actions\/(.+?)\/(run|start)$/);
+  if (actRunMatch) {
+    const rawAction = decodeURIComponent(actRunMatch[1]).trim();
+    if (!rawAction) return null;
+    const op = actRunMatch[2];
     if (rawAction.includes("/")) {
-      const parts = rawAction.split("/");
+      const slashIdx = rawAction.indexOf("/");
+      const pkg = rawAction.slice(0, slashIdx);
+      const act = rawAction.slice(slashIdx + 1);
       return {
-        packageId: parts[0],
-        actionId: parts.slice(1).join("/"),
+        packageId: pkg,
+        actionId: act,
         fullAction: rawAction,
+        operation: op,
       };
     }
+    const resolvedPkg = ACTION_PACKAGE_MAP[rawAction];
     return {
+      packageId: resolvedPkg,
       actionId: rawAction,
-      fullAction: rawAction,
+      fullAction: resolvedPkg ? `${resolvedPkg}/${rawAction}` : rawAction,
+      operation: op,
+    };
+  }
+  // 4. /actions/:id
+  const actMatch = normalized.match(/^\/actions\/(.+)$/);
+  if (actMatch) {
+    const rawAction = decodeURIComponent(actMatch[1]).trim();
+    if (!rawAction) return null;
+    if (rawAction.includes("/")) {
+      const slashIdx = rawAction.indexOf("/");
+      const pkg = rawAction.slice(0, slashIdx);
+      const act = rawAction.slice(slashIdx + 1);
+      return {
+        packageId: pkg,
+        actionId: act,
+        fullAction: rawAction,
+        operation: "describe",
+      };
+    }
+    const resolvedPkg = ACTION_PACKAGE_MAP[rawAction];
+    return {
+      packageId: resolvedPkg,
+      actionId: rawAction,
+      fullAction: resolvedPkg ? `${resolvedPkg}/${rawAction}` : rawAction,
+      operation: "describe",
     };
   }
   return null;
@@ -193,7 +274,7 @@ function proxyRequest(req, res, targetPath = req.url) {
   req.pipe(proxyReq);
 }
 
-// 6. 创建 HTTPS 服务
+// 6. 创建 HTTPS 服务 (严格的白名单反向代理与默认拒绝策略)
 const server = https.createServer({ key, cert }, async (req, res) => {
   // CORS 支持
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -208,8 +289,8 @@ const server = https.createServer({ key, cert }, async (req, res) => {
   const parsedUrl = new URL(req.url, "https://localhost");
   const pathname = parsedUrl.pathname;
 
-  // 健康检查直接放行
-  if (pathname === "/api/v2/health" || pathname === "/health") {
+  // 放行健康检查：GET /api/v2/health 与 GET /health
+  if ((pathname === "/api/v2/health" || pathname === "/health") && req.method === "GET") {
     proxyRequest(req, res);
     return;
   }
@@ -231,21 +312,21 @@ const server = https.createServer({ key, cert }, async (req, res) => {
   }
 
   // ---------------------------------------------------------------------------
-  // sk 视图：白名单严格收敛
+  // sk 视图：白名单严格收敛 (只读检索与受控追加)
   // ---------------------------------------------------------------------------
   if (view === "sk") {
-    // 1. 动作列表请求
+    // 放行动作列表：GET /api/v2/actions 与 GET /actions (严格过滤白名单 4 项动作)
     if ((pathname === "/api/v2/actions" || pathname === "/actions") && req.method === "GET") {
       try {
         const queryRes = await fetch(`http://${INTERNAL_HOST}:${INTERNAL_PORT}/api/v2/actions`);
         const actions = await queryRes.json();
-        // 严格过滤出白名单的 4 项动作
         const filtered = Array.isArray(actions)
           ? actions.filter(
               (a) =>
                 SK_ALLOWLIST.has(a.id) ||
                 (a.actionId && SK_ALLOWLIST.has(a.actionId)) ||
-                (a.packageId && SK_ALLOWLIST.has(`${a.packageId}/${a.id}`))
+                (a.packageId && SK_ALLOWLIST.has(`${a.packageId}/${a.id}`)) ||
+                (a.packageId && a.actionId && SK_ALLOWLIST.has(`${a.packageId}/${a.actionId}`))
             )
           : [];
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -258,61 +339,66 @@ const server = https.createServer({ key, cert }, async (req, res) => {
       }
     }
 
-    // 2. 检查特定动作请求或调用
+    // 放行授权动作描述与执行：仅允许白名单 4 项动作的 GET describe 与 POST run/start
     const actionTarget = parseActionTarget(pathname);
     if (actionTarget) {
       const allowed =
         SK_ALLOWLIST.has(actionTarget.actionId) ||
-        (actionTarget.fullAction && SK_ALLOWLIST.has(actionTarget.fullAction));
+        SK_ALLOWLIST.has(actionTarget.fullAction);
 
-      if (!allowed) {
-        res.writeHead(403, { "Content-Type": "application/json" });
-        res.end(
-          JSON.stringify({
-            ok: false,
-            error: {
-              code: "ACTION_FORBIDDEN",
-              message: `Action '${actionTarget.fullAction || actionTarget.actionId}' is not allowed in sk view`,
-            },
-          })
-        );
-        return;
+      if (allowed) {
+        if (actionTarget.operation === "describe" && req.method === "GET") {
+          proxyRequest(req, res);
+          return;
+        }
+        if ((actionTarget.operation === "run" || actionTarget.operation === "start") && req.method === "POST") {
+          proxyRequest(req, res);
+          return;
+        }
       }
-      // 允许的白名单动作，代理执行
-      proxyRequest(req, res);
-      return;
-    }
 
-    // 3. sk 视图禁止写操作或非白名单路径
-    if (req.method !== "GET" && !pathname.includes("/runs")) {
       res.writeHead(403, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
           ok: false,
           error: {
-            code: "FORBIDDEN",
-            message: "Write operations are forbidden in sk view",
+            code: "ACTION_FORBIDDEN",
+            message: `Action '${actionTarget.fullAction || actionTarget.actionId}' is not allowed in sk view`,
           },
         })
       );
       return;
     }
 
-    proxyRequest(req, res);
+    // 其余所有请求全部直接响应 403 阻断，绝对不调用 proxyRequest 默认转发
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        ok: false,
+        error: {
+          code: "FORBIDDEN",
+          message: "Access denied by gateway security policy",
+        },
+      })
+    );
     return;
   }
 
   // ---------------------------------------------------------------------------
-  // skm 视图：具备完整读写与受控维护能力
+  // skm 视图：受控维护视图 (workspace, knowledge, maintenance)
   // ---------------------------------------------------------------------------
   if (view === "skm") {
-    // 动作列表请求：过滤保留 workspace, knowledge, maintenance
+    // 放行动作列表：GET /api/v2/actions 与 GET /actions (过滤保留三个受控包动作)
     if ((pathname === "/api/v2/actions" || pathname === "/actions") && req.method === "GET") {
       try {
         const queryRes = await fetch(`http://${INTERNAL_HOST}:${INTERNAL_PORT}/api/v2/actions`);
         const actions = await queryRes.json();
         const filtered = Array.isArray(actions)
-          ? actions.filter((a) => !a.packageId || SKM_PACKAGE_ALLOWLIST.has(a.packageId))
+          ? actions.filter(
+              (a) =>
+                (a.packageId && SKM_PACKAGE_ALLOWLIST.has(a.packageId)) ||
+                (a.id && ACTION_PACKAGE_MAP[a.id])
+            )
           : [];
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(filtered));
@@ -324,32 +410,53 @@ const server = https.createServer({ key, cert }, async (req, res) => {
       }
     }
 
-    // 检查动作权限
+    // 放行授权动作描述与执行：仅允许受控包内的动作 GET describe 与 POST run/start
     const actionTarget = parseActionTarget(pathname);
-    if (actionTarget && actionTarget.packageId) {
-      if (!SKM_PACKAGE_ALLOWLIST.has(actionTarget.packageId)) {
-        res.writeHead(403, { "Content-Type": "application/json" });
-        res.end(
-          JSON.stringify({
-            ok: false,
-            error: {
-              code: "PACKAGE_FORBIDDEN",
-              message: `Package '${actionTarget.packageId}' is not allowed in skm view`,
-            },
-          })
-        );
-        return;
+    if (actionTarget) {
+      const allowed =
+        actionTarget.packageId && SKM_PACKAGE_ALLOWLIST.has(actionTarget.packageId);
+
+      if (allowed) {
+        if (actionTarget.operation === "describe" && req.method === "GET") {
+          proxyRequest(req, res);
+          return;
+        }
+        if ((actionTarget.operation === "run" || actionTarget.operation === "start") && req.method === "POST") {
+          proxyRequest(req, res);
+          return;
+        }
       }
+
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          ok: false,
+          error: {
+            code: "PACKAGE_FORBIDDEN",
+            message: `Package '${actionTarget.packageId || "unknown"}' is not allowed in skm view`,
+          },
+        })
+      );
+      return;
     }
 
-    // 全量畅通代理
-    proxyRequest(req, res);
+    // 其余所有请求全部直接响应 403 阻断，绝对不调用 proxyRequest 默认转发
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        ok: false,
+        error: {
+          code: "FORBIDDEN",
+          message: "Access denied by gateway security policy",
+        },
+      })
+    );
     return;
   }
 
-  // 默认兜底
-  res.writeHead(404, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: "Not Found" } }));
+  // 兜底 403 阻断
+  res.writeHead(403, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ ok: false, error: { code: "FORBIDDEN", message: "Forbidden" } }));
 });
 
 // 7. 启动服务监听
@@ -357,7 +464,7 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log("============================================================");
   console.log("Starting ActionDock Knowledge Server (Single-Port Virtual Views Mode)");
   console.log(`Port:           ${PORT} (HTTPS, Virtual Views)`);
-  console.log("sk view:        Enabled (Action allowlist: search.rg, files.read, files.list, knowledge.collect)");
+  console.log("sk view:        Enabled (Read & append-only: search.rg, files.read, files.list, knowledge.collect)");
   console.log("skm view:       Enabled (Package allowlist: workspace, knowledge, maintenance)");
   console.log(`Workspace Root: ${WORKSPACE_ROOT}`);
   console.log(`Inbox Root:     ${KNOWLEDGE_INBOX_ROOT}`);

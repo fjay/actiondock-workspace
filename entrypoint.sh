@@ -33,6 +33,22 @@ if [ "$#" -gt 0 ] && [ "$1" != "serve" ]; then
     exec "$@"
 fi
 
-# 4. 启动常驻单端口虚拟视图 HTTP 服务 (原生单端口多视图 Virtual Views 模式)
+# 4. 强约束安全校验：ACTIONDOCK_TOKEN 与 ACTIONDOCK_AGENT_TOKEN 必须存在且长度 >= 32 且互不相同
+if [ -z "${ACTIONDOCK_TOKEN}" ] || [ "${#ACTIONDOCK_TOKEN}" -lt 32 ]; then
+    echo "[SECURITY ERROR] ACTIONDOCK_TOKEN must be set and contain at least 32 characters." >&2
+    exit 1
+fi
+
+if [ -z "${ACTIONDOCK_AGENT_TOKEN}" ] || [ "${#ACTIONDOCK_AGENT_TOKEN}" -lt 32 ]; then
+    echo "[SECURITY ERROR] ACTIONDOCK_AGENT_TOKEN must be set and contain at least 32 characters." >&2
+    exit 1
+fi
+
+if [ "${ACTIONDOCK_TOKEN}" = "${ACTIONDOCK_AGENT_TOKEN}" ]; then
+    echo "[SECURITY ERROR] ACTIONDOCK_TOKEN and ACTIONDOCK_AGENT_TOKEN must not be identical." >&2
+    exit 1
+fi
+
+# 5. 启动常驻单端口虚拟视图 HTTP 服务 (原生单端口多视图 Virtual Views 模式)
 exec node /app/server/virtual-views-server.mjs
 
