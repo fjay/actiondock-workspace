@@ -60,5 +60,45 @@ for token in "${ACTIONDOCK_TOKEN}" "${ACTIONDOCK_AGENT_TOKEN}"; do
 done
 
 # 5. 启动常驻单端口虚拟视图 HTTP 服务 (原生单端口多视图 Virtual Views 模式)
-exec node /app/server/virtual-views-server.mjs
+PORT="${PORT:-443}"
+
+echo "============================================================"
+echo "Starting ActionDock Knowledge Server (Single-Port Virtual Views Mode)"
+echo "Port:           ${PORT} (HTTPS, Virtual Views)"
+echo "Workspace Root: ${WORKSPACE_ROOT:-/srv/workspace}"
+echo "Inbox Root:     ${KNOWLEDGE_INBOX_ROOT:-/srv/knowledge-inbox}"
+echo "============================================================"
+
+# TLS 证书公共参数配置
+TLS_FLAGS=""
+CERT_FILE="${ACTIONDOCK_TLS_CERT:-/etc/actiondock/certs/cert.pem}"
+KEY_FILE="${ACTIONDOCK_TLS_KEY:-/etc/actiondock/certs/key.pem}"
+
+if [ -f "${CERT_FILE}" ] && [ -f "${KEY_FILE}" ]; then
+    echo "[INFO] Using custom TLS certificates from ${CERT_FILE} and ${KEY_FILE}"
+    TLS_FLAGS="--tls-cert ${CERT_FILE} --tls-key ${KEY_FILE}"
+else
+    echo "[INFO] No custom certificates provided, ad serve will auto-generate self-signed TLS certificates"
+fi
+
+# 动态构建包含 sk 视图与 skm 视图的 JSON 配置字符串 (基于原生 ActionDock 虚拟视图)
+VIEWS_JSON=$(node -e '
+const crypto = require("node:crypto");
+const views = {
+  default: {
+    token: crypto.randomBytes(32).toString("hex")
+  },
+  sk: {
+    token: process.env.ACTIONDOCK_TOKEN,
+    actionAllowlist: ["search.rg", "files.read", "files.list", "knowledge.collect"]
+  },
+  skm: {
+    token: process.env.ACTIONDOCK_AGENT_TOKEN,
+    packageAllowlist: ["workspace", "knowledge", "maintenance"]
+  }
+};
+console.log(JSON.stringify(views));
+')
+
+exec ad serve --host 0.0.0.0 --port "${PORT:-443}" --https ${TLS_FLAGS} --views "${VIEWS_JSON}"
 
