@@ -76,7 +76,7 @@ WORKSPACE_ROOT=/srv/workspace ad mcp
 
 ## 标准作业规程
 
-包含标准排查探索规程：`playbooks/inspect-workspace.md`。为智能体提供结构化的工作区代码排查步骤，按目录摸底、全文检索与分段精读顺序规范调用链路。
+包含标准排查探索与修改规程：`playbooks/inspect-workspace.md`。为智能体提供结构化的工作区代码排查与修改步骤，涵盖目录摸底、全文检索、分段精读、受控修改、断链自检以及原生终端审查回滚闭环。
 
 ## 安全与防护策略
 
@@ -132,6 +132,8 @@ ad run files.read -- path=src/limits.ts startLine:=1 maxLines:=20
 ad run files.list -- path=src depth:=1
 ad run files.write -- path=notes/task.md content="待办事项清单"
 ad run files.edit -- path=notes/task.md targetContent="清单" replacementContent="汇总"
+ad run links.verify -- path=notes
+ad run bash.exec -- command="git status"
 
 # 带包限定前缀与 --json 机器模式输出调用
 ad run workspace/search.rg --json -- pattern=WorkspacePathPolicy paths.0=src
@@ -139,6 +141,8 @@ ad run workspace/files.read --json -- path=src/limits.ts startLine:=1 maxLines:=
 ad run workspace/files.list --json -- path=src depth:=1
 ad run workspace/files.write --json -- path=notes/task.md content="待办事项清单"
 ad run workspace/files.edit --json -- path=notes/task.md targetContent="清单" replacementContent="汇总"
+ad run workspace/links.verify --json -- path=notes
+ad run workspace/bash.exec --json -- command="git status"
 ```
 
 #### 内联 JSON 调用（与扁平参数互斥）

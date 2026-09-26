@@ -713,8 +713,12 @@
       "description": "Standard operating procedure for exploring files and searching codebase in the engineering workspace",
       "actions": [
         "search.rg",
+        "files.read",
         "files.list",
-        "files.read"
+        "files.write",
+        "files.edit",
+        "links.verify",
+        "bash.exec"
       ]
     }
   }
