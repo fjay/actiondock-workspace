@@ -1,18 +1,21 @@
 [
   {
     "path": "/srv/workspace/order-service",
+    "url": "git@github.com:example/order-service.git",
     "repoType": "code",
     "sourceBranch": "release",
     "knowledgeBranch": "docs"
   },
   {
     "path": "/srv/workspace/cron-service",
+    "url": "git@github.com:example/cron-service.git",
     "repoType": "code",
     "sourceBranch": "release",
     "knowledgeBranch": "docs"
   },
   {
     "path": "/srv/workspace/system-knowledge",
+    "url": "git@github.com:example/system-knowledge.git",
     "repoType": "system_knowledge",
     "sourceBranch": "master"
   }

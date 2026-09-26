@@ -121,12 +121,14 @@ SSH_DIR=/root/.ssh
 [
   {
     "path": "/srv/workspace/order-service",
+    "url": "git@github.com:example/order-service.git",
     "repoType": "code",
     "sourceBranch": "release",
     "knowledgeBranch": "docs"
   },
   {
     "path": "/srv/workspace/system-knowledge",
+    "url": "git@github.com:example/system-knowledge.git",
     "repoType": "system_knowledge",
     "sourceBranch": "master"
   }
@@ -134,7 +136,8 @@ SSH_DIR=/root/.ssh
 ```
 
 字段说明：
-- `path`：仓库在容器内的绝对路径。
+- `path`：仓库在容器内的绝对工作区路径。
+- `url`：远端 Git 仓库克隆地址（可选）。若本地工作区尚无该目录，系统会在同步时自动执行免大文件克隆；若宿主机已提前克隆，可省略。
 - `repoType`：`code`（业务代码仓，双分支治理）或 `system_knowledge`（系统级知识仓，单分支）。
 - `sourceBranch`：主干代码分支。
 - `knowledgeBranch`：知识分支（仅对 `code` 类型生效）。

@@ -54,8 +54,8 @@ ad describe maintenance/maintenance.sync --profile skm
 
 ### 代码分支同步：`maintenance/maintenance.sync`
 
-- **用途**：同步最新主干代码至知识分支。
-- **参数**：`path`（可选，单仓路径；省略时同步所有仓库）。
+- **用途**：同步最新主干代码至知识分支（若本地工作区不存在该目录且提供了 `url`，将自动从远端克隆）。
+- **参数**：`path`（可选，单仓路径；省略时同步所有仓库）、`url`（可选，远端 Git 克隆地址）。
 - **范例**：
   ```bash
   # 同步指定仓库
