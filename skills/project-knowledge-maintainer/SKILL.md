@@ -26,7 +26,7 @@ metadata:
 
 ## 核心工具箱速查
 
-> 控制项（`--profile skm`、`--json` 等）写在 `--` 之前，`--` 之后为 Action 入参。维护操作一律复用 `--profile skm`。
+> 控制项（`--profile skm`、`--json` 等）写在 `--` 之前，`--` 之后为 Action 入参。维护操作一律复用 `--profile skm`。若对任何动作的入参、出参或字段含义存在疑惑，可随时执行 `ad describe <action> --profile skm`（例如 `ad describe workspace/files.edit --profile skm`）自省获取其完整描述、模式定义（`inputSchema` 与 `outputSchema`）及传参示例。
 
 ### 工作区读写、编辑与审查工具（`--profile skm`）
 - `search.rg`：全工作区跨仓或单仓代码与知识库正则及字面量检索。

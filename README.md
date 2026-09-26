@@ -179,10 +179,21 @@ ad run knowledge/knowledge.collect --profile sk --input-file candidate.json
 
 ## Maintainer Agent 自动化维护规程 (Action 驱动)
 
-Maintainer Agent 按预设周期唤起，通过面向维护智能体的受控维护配置（统一端口 443，配置标识 `skm`）驱动维护闭环，全流程统一采用 ActionDock 纯动作规范，彻底摆脱 Docker 嵌套命令与无状态 Shell 脚本。
+Maintainer Agent 按预设周期唤起，通过面向维护智能体的受控维护配置（统一端口 443，配置标识 `skm`）驱动维护闭环，全流程统一采用 ActionDock 纯动作规范，彻底摆脱 Docker 嵌套命令与无状态 Shell 脚本。开发者与智能体若对任何动作的输入参数、返回结构或字段含义存疑，可随时使用 `ad describe` 自省查询任意动作工具的模式定义（获取完整描述、`inputSchema` 与 `outputSchema` 及传参示例）：
+
+```bash
+# 查询动作完整描述、模式定义与传参示例
+ad describe workspace/files.edit --profile skm
+ad describe maintenance/maintenance.sync --profile skm
+```
 
 ### 核心动作速查 (面向 `skm` 维护服务)
 
+- **动作模式自省与参数查询**：
+  ```bash
+  ad describe workspace/files.edit --profile skm
+  ad describe maintenance/maintenance.sync --profile skm
+  ```
 - **全量代码分支同步**：
   ```bash
   ad run maintenance/maintenance.sync --profile skm

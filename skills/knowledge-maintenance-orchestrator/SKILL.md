@@ -15,6 +15,7 @@ metadata:
 
 - **核心定位**：本技能是知识中枢自动化维护的主控编排技能，面向云端维护智能体。主控智能体依托特权维护服务统一编排维护闭环，实现纯动作调用与结构化决策，杜绝宿主机容器嵌套执行与无状态脚本拼接。
 - **环境依赖**：执行过程依赖 ActionDock 特权维护服务（服务端口 443，配置标识 `--profile skm`）。所有维护动作（`maintenance/*`）与工作区读写动作（`workspace/*`）统一在此受控环境中执行。
+- **动作契约与模式自省**：所有工具调用统一基于 ActionDock 纯动作协议（`ad run <action> --profile skm`）。若智能体对任何动作的输入参数、可选字段或返回结构存在疑惑，可随时执行 `ad describe <action> --profile skm`（例如 `ad describe maintenance.sync --profile skm` 或 `ad describe workspace/files.edit --profile skm`）进行自省，获取该动作的完整描述、模式定义（`inputSchema` 与 `outputSchema`）以及推荐的扁平传参示例。
 - **协作技能依赖**：在具体文档编写与局部修补环节，主智能体负责调度子智能体，子智能体挂载并遵循 [项目知识库维护技能](../project-knowledge-maintainer/SKILL.md) 深入对应源码执行细粒度核验与文档产出。
 
 ---
