@@ -92,10 +92,46 @@ metadata:
 
 ### 子智能体调度与协作
 
-主智能体与子智能体保持极简高效协作：
+主智能体与子智能体分工明确、紧密协作，由主智能体负责维护全流程全局编排，子智能体深入代码一线完成知识提取与文档编写：
 
-- **主智能体**：负责维护流程全局编排（同步、扫描、门禁校验、发布推送与检查点推进），统一持有特权维护服务（`--profile skm`）。
-- **子智能体**：挂载并遵循 [项目知识库维护技能](../project-knowledge-maintainer/SKILL.md) 深入对应源码执行知识核验与文档编写。关于本仓文档与系统知识仓的联动修改、四问判定与格式布局，全部依托该技能既有规约自主决策。任务完成后向主智能体汇报改动清单。
+- **职责划分**：
+  - **主智能体**：负责维护全流程的全局编排（分支同步、变更扫描、子智能体调度、变更门禁校验、统一发布推送与检查点推进），统一持有特权维护服务（`--profile skm`）。
+  - **子智能体**：挂载并遵循 [项目知识库维护技能](../project-knowledge-maintainer/SKILL.md) 深入对应源码执行细粒度知识核验与文档编写。关于本仓文档与系统知识仓的联动修改、失效四问判定与格式布局，全部依托该技能既有规约自主决策。任务完成后向主智能体汇报改动清单与核验结论。
+- **派发指令与工具透传铁律**：
+  - **显式透传原则**：主智能体在调度子智能体时，必须在派发提示词中显式、完整告知子智能体当前依托 `--profile skm` 特权受控环境，以及有哪些动作可用、具体调用参数方式，杜绝子智能体由于上下文缺失而不知道可用工具或陷入无效摸索。
+  - **特权环境声明**：派发指令必须明确声明运行环境基于 ActionDock 纯动作协议，所有动作调用均需附加 `--profile skm` 配置标识。
+- **子智能体可用特权动作速查清单**：
+  - `workspace/search.rg`：全文检索（`ad run workspace/search.rg --profile skm -- pattern="<keyword>" paths.0="<path>"`）
+  - `workspace/files.read`：分段直读（`ad run workspace/files.read --profile skm -- path="<path>" startLine:=1 maxLines:=2000`）
+  - `workspace/files.edit`：局部受控精准编辑（`ad run workspace/files.edit --profile skm -- path="<path>" targetContent="<old>" replacementContent="<new>"`）
+  - `workspace/files.write`：安全新建或覆盖文档（`ad run workspace/files.write --profile skm -- path="<path>" content="<content>"`）
+  - `workspace/files.list`：目录层级浏览（`ad run workspace/files.list --profile skm -- path="<dir>" depth:=1`）
+  - `workspace/git.diff` 与 `workspace/git.status`：差异比对与状态自查（`ad run workspace/git.status --profile skm -- path="<repoPath>"` 与 `ad run workspace/git.diff --profile skm -- path="<repoPath>"`）
+  - **模式自省**：若对任何动作入参格式存在疑惑，随时执行 `ad describe <action> --profile skm`（例如 `ad describe workspace/files.edit --profile skm`）获取完整模式定义与传参示例。
+- **标准子智能体派发提示词模板**：
+  主智能体调度子智能体时，必须按下述标准模板组装派发指令：
+
+  ````markdown
+  你正在执行知识中枢维护任务，负责目标仓库的知识库核验与文档编写。
+
+  - **目标仓库工作区路径**：`/srv/workspace/<target-repo>`
+  - **跨仓探索授权**：所有代码仓与系统知识仓平铺于 `/srv/workspace`。已完全授权你访问上级目录（`..`），必要时可查阅兄弟代码仓源码与 `../system-knowledge`（如数据库映射 `db-map.md`、`ddl/` 快照或跨服务调用契约）。
+  - **环境与特权动作工具**：当前依托 ActionDock 特权受控环境（`--profile skm`）。请使用以下特权动作开展工作（若对入参格式存在疑惑，可随时执行 `ad describe <action> --profile skm` 自省）：
+    - 全文检索：`ad run workspace/search.rg --profile skm -- pattern="<keyword>" paths.0="<path>"`
+    - 分段直读：`ad run workspace/files.read --profile skm -- path="<path>" startLine:=1 maxLines:=2000`
+    - 局部编辑：`ad run workspace/files.edit --profile skm -- path="<path>" targetContent="<old>" replacementContent="<new>"`
+    - 安全写入：`ad run workspace/files.write --profile skm -- path="<path>" content="<content>"`
+    - 目录浏览：`ad run workspace/files.list --profile skm -- path="<dir>" depth:=1`
+    - 状态自查与差异比对：`ad run workspace/git.status --profile skm -- path="<repoPath>"` 与 `ad run workspace/git.diff --profile skm -- path="<repoPath>"`
+  - **任务指引与规约**：挂载并严格遵循项目知识库维护技能规范。执行更新门槛与失效四问判定；若需更新或新建，遵守统一目录布局与规范命名。
+  - **当前具体核验任务**：
+    - <具体说明本次代码变更范围、涉及提交或冷启动建库分类范围>
+  - **完成汇报要求**：
+    - 任务完成后向主智能体汇报，汇报内容必须包含：
+      - 文档判定结论（是否需要更新以及原因说明）
+      - 修改或新建的文档清单及简要说明
+      - 工作区状态审查结果
+  ````
 
 ### 统一工作区拓扑与跨仓上级目录授权
 
