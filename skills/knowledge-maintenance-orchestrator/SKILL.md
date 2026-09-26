@@ -21,6 +21,15 @@ metadata:
   - 通过 `ad list --profile skm` 列出远端所有可用动作清单及其功能描述。
   - 通过 `ad describe <action> --profile skm` 查询具体动作的完整描述、模式定义以及推荐的传参示例。
   - 通过 `ad info <package> --profile skm` 查看具体工具包内的所有动作与规程。
+- **扁平参数调用规范与传参语法**：在终端执行 `ad run` 时，推荐采用扁平参数赋值（`ad run <action> [control-options] [-- <assignments...>]`），杜绝 JSON 嵌套引号转义陷阱：
+  - 控制选项与数据参数隔离：`--` 分隔符之前为控制选项（如 `--profile skm`、`--json`），`--` 分隔符之后为业务入参。
+  - **字符串赋值操作符**（`=`）：`key=value` 严格保留为纯字符串，不进行隐式类型转换（示例：`path="/srv/workspace/order-service"`、`command="git status"`）。
+  - **非字符串赋值操作符**（`:=`）：`key:=json` 用于传递数值、布尔值或复杂 JSON 结构（数值示例：`depth:=1`、`startLine:=1`、`maxLines:=100`；布尔值示例：`checkAnchors:=true`、`fixedStrings:=true`）。
+  - **数组参数传递规则（特别注意）**：
+    - 连续点号索引语法（首选推荐）：使用纯数字从 `0` 开始连续递增。例如 `paths` 为数组时，必须写作 `paths.0="/srv/workspace/order/src" paths.1="/srv/workspace/order/docs"`。数组索引必须从 0 开始连续编号，严禁跳号或稀疏数组。
+    - JSON 数组直接赋值语法：使用 `:=` 赋值操作符直接传入 JSON 数组字符串，例如 `paths:='["src", "docs"]'`。
+  - **嵌套对象传参规则**：通过点号连接各层级属性名，例如 `metadata.author="agent" metadata.version:=2`。
+  - **模式互斥红线**：扁平参数、`--input <json>` 与 `--input-file <path>` 严格互斥，严禁混用。
 - **绝对交付标志**：`maintenance.complete` 动作是本仓维护任务圆满完成与最终交付的唯一绝对事实源。执行成功后，外部调度驱动器立即感知检查点推进并闭环本仓。
 
 ---
@@ -91,7 +100,7 @@ metadata:
     - data 类别（红线约束）：本仓仅建 `data/data-databases.md` 轻量引用索引，注明所涉表域与数据源。严禁在代码仓自身文档中复制粘贴全量表结构或建表脚本。
     - runbook 类别：排障手册、高频错误码、运维配置与故障自愈流程。
 - **常用受控维护工具动作**：
-  - 全文检索：`ad run workspace/search.rg --profile skm -- pattern="<keyword>" paths.0="/srv/workspace/<path>"`
+  - 全文检索：`ad run workspace/search.rg --profile skm -- pattern="<keyword>" paths.0="/srv/workspace/<path>/src" paths.1="/srv/workspace/<path>/docs"`
   - 分段直读：`ad run workspace/files.read --profile skm -- path="/srv/workspace/<path>" startLine:=1 maxLines:=2000`
   - 局部编辑：`ad run workspace/files.edit --profile skm -- path="/srv/workspace/<path>" targetContent="<old>" replacementContent="<new>"`
   - 安全写入：`ad run workspace/files.write --profile skm -- path="/srv/workspace/<path>" content="<content>"`

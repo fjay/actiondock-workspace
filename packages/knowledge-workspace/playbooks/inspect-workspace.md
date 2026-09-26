@@ -49,7 +49,7 @@
 定位关键类名、函数定义、错误日志或配置项。利用 ripgrep 原生参数进行精准搜索。
 
 - **调用原则**：
-  - 先窄后宽：若已知目标模块，通过 `paths` 数组限定检索子目录；
+  - 先窄后宽：若已知目标模块，通过 `paths` 数组限定检索子目录（使用连续点号索引语法，如 `paths.0="src" paths.1="docs"`）；
   - 避免转义：包含特殊符号的代码片段使用 `fixedStrings:=true` 进行字面量精确匹配；
   - 上下文把控：需要观察调用上下文时配置 `context:=2`，必要时通过 `maxResults` 约束返回条数。
 - **推荐调用示例（扁平参数）**：
@@ -57,8 +57,8 @@
   # 基础正则模式搜索：
   ad run search.rg -- pattern="WorkspacePathPolicy"
 
-  # 限定子目录与忽略大小写搜索：
-  ad run search.rg -- pattern="payment" paths.0=src ignoreCase:=true
+  # 限定多子目录与忽略大小写搜索（数组参数连续索引）：
+  ad run search.rg -- pattern="payment" paths.0="src" paths.1="docs" ignoreCase:=true
 
   # 字面量精确匹配（无需正则转义，附带上下文行）：
   ad run search.rg -- pattern="defineAction<Input, Output>" fixedStrings:=true context:=2 maxResults:=20
@@ -146,5 +146,10 @@
 
 - **严格限定在沙箱内**：所有传参的 `path` 必须为相对路径，严禁使用 `../` 逃逸出工作区根目录（违者触发 `PATH_OUTSIDE_WORKSPACE`）。
 - **敏感信息全局阻断**：严禁尝试读取 `.env`、`**/*.pem`、`.git/**` 等敏感机密凭据文件（违者触发 `SENSITIVE_PATH_DENIED`）。
-- **传参规范**：主流推荐使用扁平参数（`-- <assignments...>`），字符串使用 `path=val`，数值/布尔/对象使用 `path:=json`，切勿混用 `--input`。
+- **传参规范与数组索引语法**：推荐使用扁平参数（`-- <assignments...>`），杜绝 JSON 嵌套转义：
+  - 控制参数写在 `--` 之前，业务数据参数写在 `--` 之后。
+  - 纯字符串使用 `=`（如 `path="src/index.ts"`、`pattern="order"`）。
+  - 数值、布尔值与复杂类型使用 `:=`（如 `depth:=1`、`startLine:=10`、`ignoreCase:=true`）。
+  - 数组参数必须使用从 0 开始的连续点号索引语法（如 `paths.0="src" paths.1="docs"`），或使用 `:=` 传入 JSON 数组（如 `paths:='["src", "docs"]'`）。
+  - 扁平参数与 `--input`、`--input-file` 严格互斥，切勿混用。
 - **排错自愈闭环**：修改文档后必须执行 `links.verify` 确保零死链，若发生误操作必须执行 `git restore .` 及时回滚恢复。

@@ -31,8 +31,24 @@ metadata:
 > - 执行 `ad list --profile skm` 可列出远端所有可用动作清单及其功能描述。
 > - 执行 `ad describe <action> --profile skm`（例如 `ad describe workspace/files.edit --profile skm`）可自省获取具体动作的完整描述、模式定义（`inputSchema` 与 `outputSchema`）及传参示例。
 
+### ActionDock 扁平参数调用规范与传参语法
+
+在终端执行 `ad run` 时，推荐采用扁平参数赋值（`ad run <action> [control-options] [-- <assignments...>]`），杜绝 JSON 嵌套引号转义陷阱：
+
+- **控制选项与数据参数隔离**：`--` 分隔符之前为控制选项（如 `--profile skm`、`--json`），`--` 分隔符之后为业务入参。
+- **字符串赋值操作符**（`=`）：`key=value` 严格保留为纯字符串，不进行隐式类型转换。
+  - 示例：`pattern="createOrder"`、`path="src/index.ts"`、`command="git status"`。
+- **非字符串赋值操作符**（`:=`）：`key:=json` 用于传递数值、布尔值或复杂 JSON 结构。
+  - 数值示例：`depth:=1`、`startLine:=10`、`maxLines:=50`、`timeoutMs:=30000`。
+  - 布尔值示例：`checkAnchors:=true`、`fixedStrings:=true`、`ignoreCase:=false`。
+- **数组参数传递规则（特别注意）**：
+  - **连续点号索引语法（首选推荐）**：使用纯数字从 `0` 开始连续递增。例如 `paths` 为数组时，必须写作 `paths.0="src" paths.1="docs"`。数组索引必须从 0 开始连续编号，严禁跳号或稀疏数组。
+  - **JSON 数组直接赋值语法**：使用 `:=` 赋值操作符直接传入 JSON 数组字符串，例如 `paths:='["src", "docs"]'`。
+- **嵌套对象传参规则**：通过点号连接各层级属性名，例如 `metadata.author="agent" metadata.version:=2`。
+- **模式互斥红线**：扁平参数、`--input <json>` 与 `--input-file <path>` 严格互斥，严禁混用。
+
 ### 工作区读写、编辑与审查工具（`--profile skm`）
-- `search.rg`：全工作区跨仓或单仓代码与知识库正则及字面量检索。
+- `search.rg`：全工作区跨仓或单仓代码与知识库正则及字面量检索。若限定多路径搜索，必须使用数组索引语法传递，例如 `paths.0="src" paths.1="docs"`。
 - `files.read`：文本分段直读文档或源码，首行附带起止行元数据。
 - `files.write`：文本安全写入，自动创建缺失父目录，支持覆盖控制。
 - `files.edit`：局部受控精准编辑，支持起止行范围限定与多重匹配防冲突保护。

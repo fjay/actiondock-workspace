@@ -50,6 +50,20 @@ ad describe maintenance/maintenance.sync --profile skm
 
 ---
 
+## 扁平参数调用规范与传参语法
+
+在终端执行 `ad run` 时，推荐采用扁平参数赋值（`ad run <action> [control-options] [-- <assignments...>]`），杜绝 JSON 嵌套引号转义陷阱：
+
+- **控制选项与数据参数隔离**：`--` 分隔符之前为控制选项（如 `--profile skm`、`--json`），`--` 分隔符之后为业务入参。
+- **字符串赋值操作符**（`=`）：`key=value` 严格保留为纯字符串，不进行隐式类型转换（示例：`path="/srv/workspace/order-service"`、`command="git status"`）。
+- **非字符串赋值操作符**（`:=`）：`key:=json` 用于传递数值、布尔值或复杂 JSON 结构（数值示例：`depth:=1`、`startLine:=1`、`maxLines:=100`；布尔值示例：`checkAnchors:=true`、`fixedStrings:=true`）。
+- **数组参数传递规则（特别注意）**：
+  - **连续点号索引语法（首选推荐）**：使用纯数字从 `0` 开始连续递增。例如 `paths` 为数组时，必须写作 `paths.0="src" paths.1="docs"`。数组索引必须从 0 开始连续编号，严禁跳号或稀疏数组。
+  - **JSON 数组直接赋值语法**：使用 `:=` 赋值操作符直接传入 JSON 数组字符串，例如 `paths:='["src", "docs"]'`。
+- **模式互斥红线**：扁平参数、`--input <json>` 与 `--input-file <path>` 严格互斥，严禁混用。
+
+---
+
 ## 核心维护动作速查
 
 ### 代码分支同步：`maintenance/maintenance.sync`
@@ -82,9 +96,13 @@ ad describe maintenance/maintenance.sync --profile skm
 
 维护智能体应优先使用局部编辑（`files.edit`）进行精准替换，避免全量写入（`files.write`）丢失大段上下文。
 
+- **跨目录关键字检索**：`workspace/search.rg`（多路径数组连续索引示例）
+  ```bash
+  ad run workspace/search.rg --profile skm -- pattern="payment" paths.0="order-service/src" paths.1="order-service/docs"
+  ```
 - **分段读取文档**：`workspace/files.read`
   ```bash
-  ad run workspace/files.read --profile skm -- path=order-service/docs/api.md startLine=1 maxLines=100
+  ad run workspace/files.read --profile skm -- path=order-service/docs/api.md startLine:=1 maxLines:=100
   ```
 - **局部精准编辑**：`workspace/files.edit`
   ```bash
@@ -139,7 +157,7 @@ ad describe maintenance/maintenance.sync --profile skm
 ad run knowledge/knowledge.list --profile skm
 
 # 提炼后将经验文件归档
-ad run knowledge/knowledge.archive --profile skm -- path=2026-09-26-order-timeout.json reason="已归入 payment 手册"
+ad run knowledge/knowledge.archive --profile skm -- id="2026-09-26-order-timeout.json" resolution="accepted" note="已归入 payment 手册"
 ```
 
 ---
